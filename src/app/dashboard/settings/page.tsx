@@ -36,13 +36,15 @@ export default function SettingsPage() {
           .eq('id', profile.institution_id)
           .single();
         
-        if (instError) {
+        const instData = inst as any;
+
+        if (instError || !instData) {
           setErrorMsg('Erro de permissão ou as tabelas SQL não foram atualizadas.');
           setLoading(false);
           return;
         }
 
-        setInstitution(inst);
+        setInstitution(instData);
       } catch (err: any) {
         console.error('Erro ao buscar dados:', typeof err === 'object' ? JSON.stringify(err) : err);
         setErrorMsg(err?.message || 'Sua sessão parece inválida ou a conta não possui escola. Faça logout e login.');
