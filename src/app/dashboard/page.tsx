@@ -63,17 +63,17 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error || !stats) {
     return (
       <div className={styles.container}>
         <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-          {error}
+          {error || 'Não foi possível carregar as estatísticas.'}
         </div>
       </div>
     );
   }
 
-  const aiAutonomyPct = stats!.total > 0 ? Math.round((stats!.aiHandling / stats!.total) * 100) : 0;
+  const aiAutonomyPct = stats.total > 0 ? Math.round((stats.aiHandling / stats.total) * 100) : 0;
 
   return (
     <div className={styles.container}>
@@ -91,10 +91,10 @@ export default function Dashboard() {
               <Users size={20} />
             </div>
           </div>
-          <p className={styles.statValue}>{stats!.total.toLocaleString('pt-BR')}</p>
+          <p className={styles.statValue}>{stats.total.toLocaleString('pt-BR')}</p>
           <div className={styles.statFooter}>
             <TrendingUp size={14} className={styles.trendUp} />
-            <span className={styles.trendText}>{stats!.newLeads} novos aguardando atendimento</span>
+            <span className={styles.trendText}>{stats.newLeads} novos aguardando atendimento</span>
           </div>
         </div>
 
@@ -108,7 +108,7 @@ export default function Dashboard() {
           <p className={styles.statValue}>{aiAutonomyPct}%</p>
           <div className={styles.statFooter}>
             <Activity size={14} style={{ color: 'var(--accent-secondary)' }} />
-            <span className={styles.trendText}>{stats!.activeAgents} agente(s) ativo(s)</span>
+            <span className={styles.trendText}>{stats.activeAgents} agente(s) ativo(s)</span>
           </div>
         </div>
 
@@ -119,9 +119,9 @@ export default function Dashboard() {
               <CheckCircle size={20} />
             </div>
           </div>
-          <p className={styles.statValue}>{stats!.conversionRate}%</p>
+          <p className={styles.statValue}>{stats.conversionRate}%</p>
           <div className={styles.statFooter}>
-            <span className={styles.trendText}>{stats!.converted} matrículas realizadas</span>
+            <span className={styles.trendText}>{stats.converted} matrículas realizadas</span>
           </div>
         </div>
       </div>
@@ -130,10 +130,10 @@ export default function Dashboard() {
       <div className={styles.chartsGrid}>
         <div className="card">
           <h3 className={styles.chartTitle}>Novas Capturas Semanais (IA vs Humano)</h3>
-          {stats!.weeklyChart.some(d => d.ai > 0 || d.human > 0) ? (
+          {stats.weeklyChart.some(d => d.ai > 0 || d.human > 0) ? (
             <div className={styles.chartContainer}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats!.weeklyChart}>
+                <LineChart data={stats.weeklyChart}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
                   <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -158,14 +158,14 @@ export default function Dashboard() {
         {/* Feed de Últimos Leads */}
         <div className="card">
           <h3 className={styles.chartTitle}>Atividade Recente</h3>
-          {stats!.recentLeads.length === 0 ? (
+          {stats.recentLeads.length === 0 ? (
             <div className={styles.emptyChart}>
               <Users size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
               <p>Nenhum lead ainda. Os contatos do WhatsApp aparecerão aqui.</p>
             </div>
           ) : (
             <div className={styles.recentLeads}>
-              {stats!.recentLeads.map((lead) => (
+              {stats.recentLeads.map((lead) => (
                 <div key={lead.id} className={styles.leadRow}>
                   <div className={styles.leadAvatar}>
                     {(lead.name || lead.phone)?.[0]?.toUpperCase() || '?'}

@@ -26,7 +26,21 @@ export default function WhatsAppPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+          
+          if (!profile?.institution_id) {
+            setErrorMsg('Seu perfil não está vinculado a uma instituição.');
+            setLoading(false);
+            return;
+          }
+
           const { data: inst } = await supabase.from('institutions').select('*').eq('id', profile.institution_id).single();
+          
+          if (!inst) {
+            setErrorMsg('Instituição não encontrada.');
+            setLoading(false);
+            return;
+          }
+
           setInstitution(inst);
 
           // Verifica se o servidor já tem dados manuais configurados (Modo Manual)
