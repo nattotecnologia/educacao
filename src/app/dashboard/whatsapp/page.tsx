@@ -25,17 +25,20 @@ export default function WhatsAppPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+          const { data: profile, error: pError } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
           
-          if (!profile?.institution_id) {
+          if (pError || !profile || !profile.institution_id) {
             setErrorMsg('Seu perfil não está vinculado a uma instituição.');
             setLoading(false);
             return;
           }
 
-          const { data: inst } = await supabase.from('institutions').select('*').eq('id', profile.institution_id).single();
+          // Agora o compilador tem certeza absoluta que profile e institution_id existem
+          const institutionId: string = profile.institution_id;
+
+          const { data: inst, error: iError } = await supabase.from('institutions').select('*').eq('id', institutionId).single();
           
-          if (!inst) {
+          if (iError || !inst) {
             setErrorMsg('Instituição não encontrada.');
             setLoading(false);
             return;
