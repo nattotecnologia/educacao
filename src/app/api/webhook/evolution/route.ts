@@ -41,12 +41,16 @@ export async function POST(request: NextRequest) {
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
   
+  console.log(`[Webhook] Recebida requisição POST às ${new Date().toISOString()}`);
+  
   const bodyText = await request.text();
+  console.log(`[Webhook] Body length: ${bodyText.length} bytes`);
   
   if (!verifyWebhookSignature(request, bodyText)) {
-    console.warn('Webhook signature inválida');
+    console.error('[Webhook] Erro: Assinatura HMAC inválida. Verifique o EVOLUTION_WEBHOOK_SECRET.');
     return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
   }
+  console.log('[Webhook] Assinatura validada com sucesso.');
 
   try {
     const payload = JSON.parse(bodyText);
@@ -54,6 +58,8 @@ export async function POST(request: NextRequest) {
     const event = payload.event;
 
     // 1. Busca a Instituição pelo Nome da Instância
+    console.log(`[Webhook] Processando instância: ${instanceName} | Evento: ${event}`);
+    
     const { data: institution, error: instError } = await supabaseAdmin
       .from('institutions')
       .select('*')
@@ -61,9 +67,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (instError || !institution) {
-      console.error('Instância não vinculada a nenhuma instituição:', instanceName);
+      console.error(`[Webhook] Erro: Instituição não encontrada para a instância "${instanceName}"`);
       return NextResponse.json({ error: 'Institution_Not_Found' }, { status: 404 });
     }
+    console.log(`[Webhook] Instituição identificada: ${institution.name} (ID: ${institution.id})`);
 
     // 2. Trata Eventos de Conexão (Sync de Status)
     if (event === 'connection.update') {
@@ -80,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Trata Mensagens Recebidas (Lógica de Chat/IA)
     if (!payload.data?.message || payload.data?.key?.fromMe) {
+      console.log('[Webhook] Info: Ignorando mensagem (formatada ou enviada por mim)');
       return NextResponse.json({ success: true, reason: 'ignored' });
     }
 
@@ -134,10 +142,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (agentError || !agent) {
+      console.warn('[Webhook] Aviso: Nenhum agente de IA ativo encontrado para esta instituição.');
       return NextResponse.json({ success: true, reason: 'no_active_agent' });
     }
+    console.log(`[Webhook] Agente ativo encontrado: ${agent.id}`);
 
     const provider = institution.ai_provider || 'openai';
+    console.log(`[Webhook] Gerando resposta com provedor: ${provider}`);
     let apiKey: string | undefined;
 
     if (provider === 'openai') {
@@ -188,6 +199,7 @@ export async function POST(request: NextRequest) {
       direction: 'outbound_ai',
       content: botMessage
     });
+    console.log('[Webhook] Resposta da IA salva no histórico.');
 
     const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
     const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : '';
@@ -209,11 +221,12 @@ export async function POST(request: NextRequest) {
         delay: 1200
       })
     });
+    console.log(`[Webhook] Sucesso: Mensagem enviada para ${phoneNumber}`);
 
     return NextResponse.json({ success: true, ai_handled: true });
     
   } catch (error: any) {
-    console.error('Erro crítico no Webhook:', error.message);
-    return NextResponse.json({ error: 'Internal_Server_Error' }, { status: 500 });
+    console.error('[Webhook] ERRO CRÍTICO:', error.stack || error.message || error);
+    return NextResponse.json({ error: 'Internal_Server_Error', details: error.message }, { status: 500 });
   }
 }
