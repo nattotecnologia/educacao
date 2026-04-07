@@ -1,30 +1,59 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { decrypt } from '@/utils/encryption';
+import { rateLimit } from '@/utils/rate-limit';
+import crypto from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const WEBHOOK_SECRET = process.env.EVOLUTION_WEBHOOK_SECRET || '';
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+export const runtime = 'nodejs';
+
+function verifyWebhookSignature(request: NextRequest, body: string): boolean {
+  if (!WEBHOOK_SECRET || WEBHOOK_SECRET === 'your_webhook_secret_here') {
+    console.warn('EVOLUTION_WEBHOOK_SECRET não configurado - validando apenas IP interno');
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1';
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('10.') || ip.startsWith('192.168.');
+  }
+
+  const signature = request.headers.get('x-evol-signature');
+  if (!signature) {
+    console.warn('Assinatura HMAC ausente no webhook');
+    return false;
+  }
+
+  const expectedSignature = crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+
+  return signature === expectedSignature;
+}
 
 export async function POST(request: NextRequest) {
+  const { success } = await rateLimit(request);
+  if (!success) {
+    return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  
+  const bodyText = await request.text();
+  
+  if (!verifyWebhookSignature(request, bodyText)) {
+    console.warn('Webhook signature inválida');
+    return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
+  }
+
   try {
-    const payload = await request.json();
+    const payload = JSON.parse(bodyText);
     const instanceName = payload.instance; 
-    
-    // Ignora se não houver mensagem ou se a mensagem for enviada pelo próprio número (bot)
-    if (!payload.data?.message || payload.data?.key?.fromMe) {
-      return NextResponse.json({ success: true, reason: 'ignored' });
-    }
+    const event = payload.event;
 
-    const incomingText = payload.data.message.conversation || payload.data.message.extendedTextMessage?.text || '';
-    const phoneRemoteJid = payload.data.key.remoteJid;
-    const phoneNumber = phoneRemoteJid.split('@')[0];
-    const pushName = payload.data.pushName || 'Lead WhatsApp';
-
-    if (!incomingText) return NextResponse.json({ success: true, reason: 'no_text' });
-
-    // 1. Descobre a Instituição pelas configurações
+    // 1. Busca a Instituição pelo Nome da Instância
     const { data: institution, error: instError } = await supabaseAdmin
       .from('institutions')
       .select('*')
@@ -36,21 +65,66 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Institution_Not_Found' }, { status: 404 });
     }
 
-    // 2. Registra ou Atualiza o Lead no Banco (CRM)
-    const { data: lead, error: leadError } = await supabaseAdmin
+    // 2. Trata Eventos de Conexão (Sync de Status)
+    if (event === 'connection.update') {
+      const state = payload.data?.state;
+      const newStatus = state === 'open' ? 'connected' : 'disconnected';
+      
+      await supabaseAdmin
+        .from('institutions')
+        .update({ whatsapp_status: newStatus })
+        .eq('id', institution.id);
+      
+      return NextResponse.json({ success: true, event: 'status_updated' });
+    }
+
+    // 3. Trata Mensagens Recebidas (Lógica de Chat/IA)
+    if (!payload.data?.message || payload.data?.key?.fromMe) {
+      return NextResponse.json({ success: true, reason: 'ignored' });
+    }
+
+    const incomingText = payload.data.message.conversation || payload.data.message.extendedTextMessage?.text || '';
+    const phoneRemoteJid = payload.data.key.remoteJid;
+    const phoneNumber = phoneRemoteJid.split('@')[0];
+    const pushName = payload.data.pushName || 'Lead WhatsApp';
+
+    if (!incomingText) return NextResponse.json({ success: true, reason: 'no_text' });
+
+    let { data: lead } = await supabaseAdmin
       .from('leads')
-      .upsert({
-        phone: phoneNumber,
-        institution_id: institution.id,
-        name: pushName,
-        status: 'ai_handling' // Por padrão, a IA assume
-      }, { onConflict: 'phone,institution_id' })
-      .select()
+      .select('*')
+      .eq('phone', phoneNumber)
+      .eq('institution_id', institution.id)
       .single();
 
-    if (leadError) console.error('Erro ao registrar lead:', leadError.message);
+    if (!lead) {
+      const { data: newLead, error: leadError } = await supabaseAdmin
+        .from('leads')
+        .insert({
+          phone: phoneNumber,
+          institution_id: institution.id,
+          name: pushName,
+          status: 'ai_handling'
+        })
+        .select()
+        .single();
+      if (leadError) console.error('Erro ao registrar lead:', leadError.message);
+      lead = newLead;
+    }
 
-    // 3. Procura um Agente de IA "ATIVO"
+    if (!lead) return NextResponse.json({ error: 'Lead_Not_Created' }, { status: 500 });
+
+    await supabaseAdmin.from('messages').insert({
+      lead_id: lead.id,
+      institution_id: institution.id,
+      direction: 'inbound',
+      content: incomingText
+    });
+
+    if (lead.status === 'human_handling') {
+      return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
+    }
+
     const { data: agent, error: agentError } = await supabaseAdmin
       .from('ai_agents')
       .select('id, system_prompt')
@@ -63,47 +137,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, reason: 'no_active_agent' });
     }
 
-    // 4. Seleção Inteligente de Provedor de IA
     const provider = institution.ai_provider || 'openai';
-    
-    let apiKey = institution.ai_api_key; // fallback
-    let baseURL = institution.ai_base_url || undefined;
+    let apiKey: string | undefined;
 
     if (provider === 'openai') {
-      apiKey = institution.openai_key || process.env.OPENAI_API_KEY;
-      baseURL = 'https://api.openai.com/v1';
+      apiKey = institution.openai_key ? decrypt(institution.openai_key) : process.env.OPENAI_API_KEY;
     } else if (provider === 'groq') {
-      apiKey = institution.groq_key || process.env.GROQ_API_KEY;
-      baseURL = 'https://api.groq.com/openai/v1';
+      apiKey = institution.groq_key ? decrypt(institution.groq_key) : process.env.GROQ_API_KEY;
     } else if (provider === 'openrouter') {
-      apiKey = institution.openrouter_key || process.env.OPENROUTER_API_KEY;
-      baseURL = 'https://openrouter.ai/api/v1';
+      apiKey = institution.openrouter_key ? decrypt(institution.openrouter_key) : process.env.OPENROUTER_API_KEY;
+    } else {
+      apiKey = institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined;
     }
+
+    const baseURL = institution.ai_base_url || undefined;
 
     if (!apiKey) {
       console.error('Nenhuma API Key configurada para o provedor:', provider);
       return NextResponse.json({ success: true, reason: 'no_api_key_configured' });
     }
 
-    const customOpenAI = new OpenAI({
-      apiKey: apiKey,
-      baseURL: baseURL,
-    });
+    const customOpenAI = new OpenAI({ apiKey, baseURL });
+
+    const { data: history } = await supabaseAdmin
+      .from('messages')
+      .select('direction, content')
+      .eq('lead_id', lead.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+      
+    const chatHistory = (history || []).reverse().map((msg: any) => ({
+      role: msg.direction === 'inbound' ? 'user' : 'assistant',
+      content: msg.content
+    }));
 
     const aiResponse = await customOpenAI.chat.completions.create({
       model: institution.ai_model || 'gpt-4o', 
       messages: [
         { role: 'system', content: agent.system_prompt },
-        { role: 'user', content: incomingText },
-      ],
+        ...chatHistory,
+      ] as any[],
       temperature: 0.7,
     });
 
     const botMessage = aiResponse.choices[0]?.message?.content || 'Desculpe, tive um erro ao processar.';
 
-    // 5. Devolve a mensagem para o WhatsApp via Evolution API
+    await supabaseAdmin.from('messages').insert({
+      lead_id: lead.id,
+      institution_id: institution.id,
+      direction: 'outbound_ai',
+      content: botMessage
+    });
+
     const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
-    const evoKey = process.env.EVOLUTION_GLOBAL_APIKEY || '';
+    const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : '';
+    const evoKey = decryptedEvoKey || process.env.EVOLUTION_GLOBAL_APIKEY || process.env.EVOLUTION_INSTANCE_TOKEN || '';
+
+    if (!evoKey) {
+        console.error('Nenhuma chave da Evolution API configurada.');
+    }
 
     await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
       method: 'POST',
@@ -114,7 +206,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         number: phoneNumber,
         text: botMessage,
-        delay: 1200 // Simula digitação curta
+        delay: 1200
       })
     });
 

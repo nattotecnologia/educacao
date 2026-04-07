@@ -9,6 +9,17 @@ import {
 import { leadService } from '@/services';
 import styles from './Leads.module.css';
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 const STATUS_LIST = [
   { value: '', label: 'Todos' },
   { value: 'new', label: 'Novo' },
@@ -38,11 +49,13 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
       const result = await leadService.getFiltered({
-        search: searchTerm,
+        search: debouncedSearch,
         status: filterStatus,
         page,
         pageSize: PAGE_SIZE,
@@ -54,11 +67,10 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, filterStatus, page]);
+  }, [debouncedSearch, filterStatus, page]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchLeads, 400);
-    return () => clearTimeout(timer);
+    fetchLeads();
   }, [fetchLeads]);
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {

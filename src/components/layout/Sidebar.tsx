@@ -30,7 +30,7 @@ export default function Sidebar() {
   const menuItems = [
     { name: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Leads', icon: Users, path: '/dashboard/leads' },
-    { name: 'Inbox (WhatsApp)', icon: MessageSquare, path: '/dashboard/inbox' },
+    { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat' },
     { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents' },
     { name: 'API WhatsApp', icon: Smartphone, path: '/dashboard/whatsapp' },
     { name: 'Configurações', icon: Settings, path: '/dashboard/settings' },

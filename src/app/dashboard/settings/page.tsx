@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Settings, Save, ShieldCheck, Mail, Globe, BrainCircuit, Loader2 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { useState, useEffect, useCallback } from 'react';
+import { Settings, Save, ShieldCheck, Mail, Globe, BrainCircuit, Loader2, RefreshCw } from 'lucide-react';
 import styles from './Settings.module.css';
 
-import { authService } from '@/services';
+import { getInstitutionSettings, updateInstitutionSettings } from './actions';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -14,40 +13,20 @@ export default function SettingsPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [syncingStatus, setSyncingStatus] = useState(false);
 
   const [institution, setInstitution] = useState<any>(null);
-
-  const supabase = createClient();
 
   useEffect(() => {
     async function fetchInstitution() {
       try {
-        const profile = await authService.getProfile();
-        
-        if (!profile?.institution_id) {
-          setErrorMsg('Sua conta não possui uma Instituição vinculada. Crie uma nova conta em /register.');
-          setLoading(false);
-          return;
+        const data = await getInstitutionSettings();
+        if (data) {
+          setInstitution(data);
         }
-
-        const { data: inst, error: instError } = await supabase
-          .from('institutions')
-          .select('*')
-          .eq('id', profile.institution_id)
-          .single();
-        
-        const instData = inst as any;
-
-        if (instError || !instData) {
-          setErrorMsg('Erro de permissão ou as tabelas SQL não foram atualizadas.');
-          setLoading(false);
-          return;
-        }
-
-        setInstitution(instData);
       } catch (err: any) {
-        console.error('Erro ao buscar dados:', typeof err === 'object' ? JSON.stringify(err) : err);
-        setErrorMsg(err?.message || 'Sua sessão parece inválida ou a conta não possui escola. Faça logout e login.');
+        console.error('Erro ao buscar dados:', err);
+        setErrorMsg(err?.message || 'Erro ao carregar configurações. Tente novamente.');
       } finally {
         setLoading(false);
       }
@@ -108,6 +87,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSyncStatus = async () => {
+    if (!institution?.evolution_instance_name) return;
+    setSyncingStatus(true);
+    try {
+      const res = await fetch(`/api/evolution?action=status&instance=${institution.evolution_instance_name}`);
+      const data = await res.json();
+      
+      const newStatus = data?.instance?.state === 'open' ? 'connected' : 'disconnected';
+      
+      // Atualiza localmente e no banco de forma otimista (opcional, aqui só local pra feedback)
+      setInstitution((prev: any) => ({ ...prev, whatsapp_status: newStatus }));
+    } catch (err) {
+      console.error('Erro ao sincronizar status:', err);
+    } finally {
+      setSyncingStatus(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -115,29 +112,11 @@ export default function SettingsPage() {
     setErrorMsg('');
 
     try {
-      const profile = await authService.getProfile();
-      const institutionId = institution?.id || profile.institution_id;
-
-      if (!institutionId) throw new Error("ID da Instituição não resolvido. Relogue no sistema.");
-
-      const { error } = await supabase
-        .from('institutions')
-        .update({
-          name: institution.name,
-          ai_provider: institution.ai_provider,
-          ai_api_key: institution.ai_api_key, // Mantido como backup/custom
-          openai_key: institution.openai_key,
-          groq_key: institution.groq_key,
-          openrouter_key: institution.openrouter_key,
-          ai_model: institution.ai_model,
-          ai_base_url: institution.ai_base_url
-        })
-        .eq('id', institutionId);
-
-      if (error) throw error;
+      await updateInstitutionSettings(institution);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
+      console.error('Erro ao salvar:', err);
       setErrorMsg(err.message || 'Erro ao salvar configurações.');
     } finally {
       setSaving(false);
@@ -201,6 +180,58 @@ export default function SettingsPage() {
             />
           </div>
           <p className={styles.infoText}>Esses dados serão usados para identificação em relatórios e cabeçalhos de mensagens se configurados.</p>
+        </div>
+
+        {/* Painel Central - Conexão WhatsApp */}
+        <div className={`glass-panel ${styles.panel}`}>
+          <div className={styles.panelTitle}>
+            <ShieldCheck size={20} />
+            <h2>Conexão WhatsApp (Evolution API)</h2>
+          </div>
+          
+          <div className={styles.inputGroup}>
+            <label>Nome da Instância</label>
+            <input 
+              type="text" 
+              placeholder="Ex: education"
+              value={institution?.evolution_instance_name || ''} 
+              onChange={(e) => setInstitution({...institution, evolution_instance_name: e.target.value})}
+              className={styles.input} 
+            />
+          </div>
+
+          <div className={styles.inputGroup}>
+            <label>API Token / Key</label>
+            <input 
+              type="password" 
+              placeholder="Token da Instância ou Global Key"
+              value={institution?.evolution_api_key || ''} 
+              onChange={(e) => setInstitution({...institution, evolution_api_key: e.target.value})}
+              className={styles.input} 
+            />
+          </div>
+
+          <div className={styles.webhookInfo}>
+            <label>Sua URL de Webhook (Copie para a Evolution):</label>
+            <div className={styles.urlDisplay}>
+              <code>{typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/evolution` : '...'}</code>
+            </div>
+          </div>
+
+          <div className={styles.statusBadge}>
+            <div className={`${styles.statusDot} ${institution?.whatsapp_status === 'connected' ? styles.online : styles.offline}`} />
+            <span>Status: {institution?.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado'}</span>
+            
+            <button 
+              type="button"
+              className={styles.syncBtn} 
+              onClick={handleSyncStatus}
+              disabled={syncingStatus || !institution?.evolution_instance_name}
+              title="Sincronizar Status com Evolution"
+            >
+              <RefreshCw size={14} className={syncingStatus ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
 
         {/* Painel Direito - Integração AI */}

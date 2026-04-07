@@ -166,3 +166,35 @@ export const agentService = {
   }
 };
 
+export const messageService = {
+  async getMessages(leadId: string) {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async sendMessage(leadId: string, content: string) {
+    const response = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ leadId, content }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Erro ao enviar mensagem');
+    }
+
+    const { message } = await response.json();
+    return message;
+  }
+};
+
+
