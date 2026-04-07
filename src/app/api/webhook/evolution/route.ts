@@ -159,7 +159,12 @@ export async function POST(request: NextRequest) {
       apiKey = institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined;
     }
 
-    const baseURL = institution.ai_base_url || undefined;
+    let baseURL = institution.ai_base_url || undefined;
+    if (!baseURL) {
+      if (provider === 'openrouter') baseURL = 'https://openrouter.ai/api/v1';
+      if (provider === 'groq') baseURL = 'https://api.groq.com/openai/v1';
+    }
+    console.log(`[Webhook] Usando baseURL: ${baseURL || 'OpenAI Default'}`);
 
     if (!apiKey) {
       console.error('Nenhuma API Key configurada para o provedor:', provider);
