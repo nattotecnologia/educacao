@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     const instanceName = payload.instance; 
     const event = payload.event;
 
-    // 1. Busca a Instituição pelo Nome da Instância
+    console.log('[Webhook] FULL PAYLOAD:', JSON.stringify(payload, null, 2));
     console.log(`[Webhook] Processando instância: ${instanceName} | Evento: ${event}`);
     
     const { data: institution, error: instError } = await supabaseAdmin
