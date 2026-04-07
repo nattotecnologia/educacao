@@ -91,8 +91,22 @@ export async function POST(request: NextRequest) {
 
     const incomingText = payload.data.message.conversation || payload.data.message.extendedTextMessage?.text || '';
     const phoneRemoteJid = payload.data.key.remoteJid;
-    const phoneNumber = phoneRemoteJid.split('@')[0];
+    const remoteJidAlt = payload.data.key.remoteJidAlt;
+    const sender = payload.sender; // Fallback da Evolution API
+
+    let phoneNumber = phoneRemoteJid.split('@')[0];
+    
+    // Se for um LID, tenta pegar o número real no Alt ou no Sender
+    if (phoneRemoteJid.includes('@lid')) {
+        if (remoteJidAlt) {
+            phoneNumber = remoteJidAlt.split('@')[0];
+        } else if (sender) {
+            phoneNumber = sender.split('@')[0];
+        }
+    }
+    
     const pushName = payload.data.pushName || 'Lead WhatsApp';
+    console.log(`[Webhook] Mensagem de ${pushName} | Número: ${phoneNumber}`);
 
     if (!incomingText) return NextResponse.json({ success: true, reason: 'no_text' });
 
