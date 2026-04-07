@@ -13,10 +13,8 @@ export const runtime = 'nodejs';
 
 function verifyWebhookSignature(request: NextRequest, body: string): boolean {
   if (!WEBHOOK_SECRET || WEBHOOK_SECRET === 'your_webhook_secret_here') {
-    console.warn('EVOLUTION_WEBHOOK_SECRET não configurado - validando apenas IP interno');
-    const forwarded = request.headers.get('x-forwarded-for');
-    const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1';
-    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('10.') || ip.startsWith('192.168.');
+    console.warn('[Webhook] Aviso: EVOLUTION_WEBHOOK_SECRET não configurado. Aceitando requisição sem validação HMAC (Modo Permissivo).');
+    return true;
   }
 
   const signature = request.headers.get('x-evol-signature');
