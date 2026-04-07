@@ -143,7 +143,12 @@ export async function POST(request: NextRequest) {
       console.warn('[Webhook] Aviso: Nenhum agente de IA ativo encontrado para esta instituição.');
       return NextResponse.json({ success: true, reason: 'no_active_agent' });
     }
-    console.log(`[Webhook] Agente ativo encontrado: ${agent.id}`);
+    console.log(`[Webhook] Agente ativo [${agent.id}] e Lead [${lead.name}] identificados.`);
+
+    if (lead.human_handling) {
+      console.log(`[Webhook] Atendimento humano ATIVO para o lead ${lead.name}. IA ignorando mensagem.`);
+      return NextResponse.json({ success: true, reason: 'human_handling_active' });
+    }
 
     const provider = institution.ai_provider || 'openai';
     console.log(`[Webhook] Gerando resposta com provedor: ${provider}`);
@@ -172,6 +177,8 @@ export async function POST(request: NextRequest) {
     }
 
     const customOpenAI = new OpenAI({ apiKey, baseURL });
+    const model = institution.ai_model || 'gpt-4o';
+    console.log(`[Webhook] Chamando IA (${provider}) - Modelo: ${model}`);
 
     const { data: history } = await supabaseAdmin
       .from('messages')
@@ -195,13 +202,18 @@ export async function POST(request: NextRequest) {
     });
 
     const botMessage = aiResponse.choices[0]?.message?.content || 'Desculpe, tive um erro ao processar.';
+    console.log(`[Webhook] IA respondeu: "${botMessage.substring(0, 50)}..."`);
 
-    await supabaseAdmin.from('messages').insert({
+    const { error: insertError } = await supabaseAdmin.from('messages').insert({
       lead_id: lead.id,
       institution_id: institution.id,
       direction: 'outbound_ai',
       content: botMessage
     });
+
+    if (insertError) {
+      console.error('[Webhook] Erro ao inserir mensagem da IA no banco:', insertError);
+    }
     console.log('[Webhook] Resposta da IA salva no histórico.');
 
     const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
