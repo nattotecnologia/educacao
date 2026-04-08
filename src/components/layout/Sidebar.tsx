@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { authService } from '@/services';
@@ -12,11 +13,22 @@ import {
   MessageSquare,
   Smartphone
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { useBranding } from '@/contexts/BrandingContext';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme } = useTheme();
+  const branding = useBranding();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const activeLogo = theme === 'dark' ? branding?.logo_light_url : branding?.logo_dark_url;
 
   const handleLogout = async () => {
     try {
@@ -39,8 +51,14 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className={styles.logoContainer}>
-        <div className={styles.logoIcon}>AI</div>
-        <h2 className={styles.logoText}>EduDashboard</h2>
+        {mounted && activeLogo ? (
+          <img src={activeLogo} alt="Logo" className={styles.dynamicLogo} />
+        ) : (
+          <>
+            <div className={styles.logoIcon}>AI</div>
+            <h2 className={styles.logoText}>EduDashboard</h2>
+          </>
+        )}
       </div>
 
       <nav className={styles.nav}>

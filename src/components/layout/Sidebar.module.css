@@ -28,6 +28,12 @@
   letter-spacing: -0.02em;
 }
 
+.dynamicLogo {
+  max-width: 100%;
+  max-height: 48px;
+  object-fit: contain;
+}
+
 .nav {
   display: flex;
   flex-direction: column;
@@ -82,4 +88,61 @@
 .logoutBtn:hover {
   background: rgba(239, 68, 68, 0.1);
   color: var(--accent-danger);
+}
+
+/* Mobile Bottom Navigation */
+@media (max-width: 768px) {
+  :global(.sidebar) {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 65px;
+    padding: 0;
+    background: rgba(19, 26, 43, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--glass-border);
+    border-bottom: none;
+    border-right: none;
+    z-index: 100;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .logoContainer, .footer {
+    display: none;
+  }
+
+  .nav {
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    justify-content: space-around;
+    align-items: center;
+    gap: 0;
+  }
+
+  .navItem {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-radius: 0;
+  }
+
+  .navItem span {
+    display: none;
+  }
+
+  .navItem.active {
+    background: transparent;
+    border-right: none;
+    border-top: 3px solid var(--accent-primary);
+    color: var(--accent-primary);
+  }
 }

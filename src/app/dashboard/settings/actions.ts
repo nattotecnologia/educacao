@@ -80,3 +80,39 @@ export async function updateInstitutionSettings(data: any) {
     throw error;
   }
 }
+
+export async function getPlatformSettings() {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from('platform_settings').select('*').eq('id', 1).single();
+    return data;
+  } catch (error) {
+    console.error('Erro em getPlatformSettings:', error);
+    return null;
+  }
+}
+
+export async function updatePlatformSettings(data: any) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Não autorizado");
+
+    const { error } = await supabase
+      .from('platform_settings')
+      .update({
+        primary_color: data.primary_color,
+        logo_light_url: data.logo_light_url,
+        logo_dark_url: data.logo_dark_url,
+        favicon_light_url: data.favicon_light_url,
+        favicon_dark_url: data.favicon_dark_url,
+      })
+      .eq('id', 1);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro em updatePlatformSettings:', error);
+    throw error;
+  }
+}

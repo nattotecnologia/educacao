@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Users, Search, Filter, MoreHorizontal, UserPlus, MessageCircle,
-  Phone, Clock, Loader2, Bot, X, ChevronLeft, ChevronRight, CheckCircle2
+  Phone, Clock, Loader2, Bot, X, ChevronLeft, ChevronRight, CheckCircle2,
+  Trash2, Edit2
 } from 'lucide-react';
 import { leadService } from '@/services';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useNotification } from '@/contexts/NotificationContext';
 import styles from './Leads.module.css';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -49,6 +53,29 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const { addNotification } = useNotification();
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'danger' as 'danger' | 'warning' | 'info',
+    action: async () => {},
+  });
+  const [editLead, setEditLead] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', phone: '' });
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const searchParams = useSearchParams();
+  const querySearch = searchParams.get('search');
+
+  // Sincroniza busca vinda da URL (Navbar)
+  useEffect(() => {
+    if (querySearch !== null) {
+      setSearchTerm(querySearch);
+      setPage(1);
+    }
+  }, [querySearch]);
+
   const debouncedSearch = useDebounce(searchTerm, 400);
 
   const fetchLeads = useCallback(async () => {
@@ -84,6 +111,72 @@ export default function LeadsPage() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent, lead: any) => {
+    e.stopPropagation();
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Excluir Lead',
+      message: `Tem certeza que deseja excluir o lead ${lead.name || lead.phone}? Esta ação não pode ser desfeita.`,
+      type: 'danger',
+      action: async () => {
+        setIsDeleting(lead.id);
+        try {
+          await leadService.delete(lead.id);
+          addNotification({
+            title: 'Lead Excluído',
+            message: 'O lead foi removido com sucesso.',
+            type: 'success',
+          });
+          fetchLeads();
+        } catch (err) {
+          addNotification({
+            title: 'Erro',
+            message: 'Não foi possível excluir o lead.',
+            type: 'error',
+          });
+        } finally {
+          setIsDeleting(null);
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
+  const openEditModal = (e: React.MouseEvent, lead: any) => {
+    e.stopPropagation();
+    setEditLead(lead);
+    setEditForm({ name: lead.name || '', phone: lead.phone || '' });
+  };
+
+  const handleUpdate = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Atualizar Lead',
+      message: `Corrigir os dados do lead para os novos valores informados?`,
+      type: 'warning',
+      action: async () => {
+        try {
+          await leadService.update(editLead.id, { name: editForm.name, phone: editForm.phone });
+          addNotification({
+            title: 'Lead Atualizado',
+            message: 'Os dados do lead foram atualizados com sucesso.',
+            type: 'success',
+          });
+          setEditLead(null);
+          fetchLeads();
+        } catch (err) {
+          addNotification({
+            title: 'Erro',
+            message: 'Não foi possível atualizar o lead.',
+            type: 'error',
+          });
+        } finally {
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -178,19 +271,40 @@ export default function LeadsPage() {
                     </div>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    {updatingId === lead.id ? (
-                      <Loader2 className="animate-spin" size={16} />
-                    ) : (
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {updatingId === lead.id ? (
+                        <Loader2 className="animate-spin" size={16} />
+                      ) : (
+                        <button
+                          className={styles.assumeBtn}
+                          title="Assumir atendimento"
+                          onClick={() => handleStatusChange(lead.id, 'human_handling')}
+                          disabled={lead.status === 'human_handling' || lead.status === 'converted'}
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>Assumir</span>
+                        </button>
+                      )}
                       <button
-                        className={styles.assumeBtn}
-                        title="Assumir atendimento"
-                        onClick={() => handleStatusChange(lead.id, 'human_handling')}
-                        disabled={lead.status === 'human_handling' || lead.status === 'converted'}
+                        className={styles.iconButton}
+                        title="Editar Lead"
+                        onClick={(e) => openEditModal(e, lead)}
                       >
-                        <CheckCircle2 size={16} />
-                        <span>Assumir</span>
+                        <Edit2 size={16} />
                       </button>
-                    )}
+                      {isDeleting === lead.id ? (
+                        <Loader2 className="animate-spin" size={16} color="var(--accent-danger)" />
+                      ) : (
+                        <button
+                          className={styles.iconButton}
+                          title="Excluir Lead"
+                          style={{ color: 'var(--accent-danger)' }}
+                          onClick={(e) => handleDelete(e, lead)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -260,6 +374,61 @@ export default function LeadsPage() {
           </div>
         </div>
       )}
+      {/* Modal de Edição */}
+      {editLead && (
+        <div className={styles.modalOverlay} onClick={() => setEditLead(null)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Editar Lead</h3>
+              <button className={styles.closeBtn} onClick={() => setEditLead(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nome do Lead</label>
+                  <input 
+                    type="text" 
+                    className="custom-input" 
+                    value={editForm.name} 
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })} 
+                    style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', color: 'white', outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Telefone</label>
+                  <input 
+                    type="text" 
+                    className="custom-input" 
+                    value={editForm.phone} 
+                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })} 
+                    style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', color: 'white', outline: 'none' }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                <button className="custom-button" style={{ background: 'transparent', border: '1px solid var(--glass-border)' }} onClick={() => setEditLead(null)}>
+                  Cancelar
+                </button>
+                <button className="custom-button" onClick={handleUpdate}>
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirm global da tela */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.action}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

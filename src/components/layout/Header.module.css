@@ -59,6 +59,132 @@
   color: var(--text-primary);
 }
 
+.notificationWrapper {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  top: 130%;
+  right: -10px;
+  width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdownHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.02);
+}
+
+.dropdownHeader h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dropdownActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dropdownActions button {
+  color: var(--text-muted);
+  transition: color 0.15s;
+  padding: 0.25rem;
+}
+
+.dropdownActions button:hover {
+  color: var(--text-primary);
+}
+
+.dropdownBody {
+  max-height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.emptyText {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.notificationItem {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notificationItem:hover {
+  background: var(--glass-bg);
+}
+
+.notificationItem.unread {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.notifIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 0.3rem;
+  flex-shrink: 0;
+}
+
+.info { background: var(--accent-primary); }
+.success { background: var(--accent-success); }
+.warning { background: var(--accent-warning); }
+.error { background: var(--accent-danger); }
+
+.notifContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notifContent h5, .notifTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary) !important;
+  margin: 0;
+}
+
+.notifContent p, .notifMessage {
+  font-size: 0.8rem;
+  color: var(--text-secondary) !important;
+  line-height: 1.4;
+  margin: 0.2rem 0;
+}
+
+.notifContent span, .notifTime {
+  font-size: 0.725rem;
+  color: var(--text-muted) !important;
+  margin-top: 0.25rem;
+  display: block;
+}
+
 .badge {
   position: absolute;
   top: -4px;

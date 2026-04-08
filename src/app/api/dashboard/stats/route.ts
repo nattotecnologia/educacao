@@ -6,6 +6,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('⚠️ AVISO: SUPABASE_SERVICE_ROLE_KEY não encontrada. O Dashboard pode exibir zeros por causa do RLS.');
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

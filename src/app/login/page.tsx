@@ -1,13 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
+import { useTheme } from 'next-themes';
+import { useBranding } from '@/contexts/BrandingContext';
 import styles from './login.module.css';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const branding = useBranding();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  const activeLogo = theme === 'dark' ? branding?.logo_light_url : branding?.logo_dark_url;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,6 +59,9 @@ export default function LoginPage() {
 
       <div className={`glass-panel animate-in ${styles.loginCard}`}>
         <div className={styles.header}>
+          {mounted && activeLogo && (
+            <img src={activeLogo} alt="Logo" className={styles.loginLogo} />
+          )}
           <h1 className={styles.title}>Welcome Back</h1>
           <p className={styles.subtitle}>Acesse a plataforma Educacional de IA</p>
         </div>
