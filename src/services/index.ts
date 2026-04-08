@@ -217,4 +217,64 @@ export const messageService = {
   }
 };
 
+export const pipelineService = {
+  async getPipelines() {
+    const profile = await authService.getProfile();
+    const { data, error } = await supabase
+      .from('pipelines')
+      .select('*')
+      .eq('institution_id', profile.institution_id)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async getStages(pipelineId: string) {
+    const { data, error } = await supabase
+      .from('pipeline_stages')
+      .select('*')
+      .eq('pipeline_id', pipelineId)
+      .order('order', { ascending: true });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async createPipeline(name: string) {
+    const profile = await authService.getProfile();
+    const { data, error } = await supabase
+      .from('pipelines')
+      .insert({ name, institution_id: profile.institution_id })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async createStage(pipelineId: string, name: string, order: number, color: string = '#3b82f6') {
+    const { data, error } = await supabase
+      .from('pipeline_stages')
+      .insert({ pipeline_id: pipelineId, name, order, color })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async moveLead(leadId: string, stageId: string, stageOrder: number) {
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ stage_id: stageId, stage_order: stageOrder })
+      .eq('id', leadId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+};
+
 

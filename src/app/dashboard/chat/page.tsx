@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { messageService, leadService } from '@/services';
 import { 
-  Search, User, Bot, UserCog, Send, Loader2, MessageSquare
+  Search, User, Bot, UserCog, Send, Loader2, MessageSquare, ArrowLeft
 } from 'lucide-react';
 import styles from './Chat.module.css';
 
@@ -140,7 +140,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${selectedLead ? styles.showChat : styles.showSidebar}`}>
       {/* SIDEBAR: Lista de Leads */}
       <div className={`glass-panel ${styles.sidebar}`}>
         <div className={styles.sidebarHeader}>
@@ -190,6 +190,14 @@ export default function ChatPage() {
         {selectedLead ? (
           <>
             <div className={styles.chatHeader}>
+              <button 
+                className={styles.backBtn}
+                onClick={() => setSelectedLead(null)}
+                title="Voltar para lista"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              
               <div className={styles.chatHeaderInfo}>
                 <div className={styles.leadAvatar}>
                   <User size={20} />
