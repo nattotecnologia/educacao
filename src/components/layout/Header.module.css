@@ -243,3 +243,54 @@
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* Responsividade Mobile para o Header */
+@media (max-width: 768px) {
+  .header {
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    gap: 0.5rem;
+  }
+
+  .searchContainer {
+    max-width: none;
+    flex: 1;
+  }
+
+  .searchInput {
+    padding: 0.6rem 1rem 0.6rem 2.2rem;
+    font-size: 0.8rem;
+  }
+
+  .searchIcon {
+    left: 0.75rem;
+    width: 16px;
+    height: 16px;
+  }
+
+  .actions {
+    gap: 0.5rem;
+  }
+
+  .userInfo {
+    display: none; /* Esconde nome e cargo no mobile para economizar espaço */
+  }
+
+  .profileBtn {
+    padding: 0;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .iconButton {
+    padding: 0.25rem;
+  }
+
+  .iconButton svg {
+    width: 18px;
+    height: 18px;
+  }
+}

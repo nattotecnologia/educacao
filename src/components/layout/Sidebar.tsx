@@ -11,7 +11,8 @@ import {
   Settings, 
   LogOut,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  KanbanSquare
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -41,7 +42,7 @@ export default function Sidebar() {
 
   const menuItems = [
     { name: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Negócios (CRM)', icon: Users, path: '/dashboard/pipeline' },
+    { name: 'Kanban', icon: KanbanSquare, path: '/dashboard/pipeline' },
     { name: 'Leads (Em Massa)', icon: Users, path: '/dashboard/leads' },
     { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat' },
     { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents' },
@@ -63,16 +64,24 @@ export default function Sidebar() {
       </div>
 
       <nav className={styles.nav}>
-        {menuItems.map((item) => {
+        {menuItems.map((item, index) => {
           const isActive = pathname === item.path;
+          // No mobile, limitamos a 5 itens para não quebrar o layout Pill
+          const isHiddenOnMobile = index > 4; 
+          
           return (
             <Link 
               key={item.name} 
               href={item.path}
-              className={`${styles.navItem} ${isActive ? styles.active : ''}`}
+              className={`${styles.navItem} ${isActive ? styles.active : ''} ${isHiddenOnMobile ? styles.desktopOnly : ''}`}
             >
-              <item.icon size={20} className={styles.icon} />
-              <span>{item.name}</span>
+              <div className={styles.iconWrapper}>
+                <item.icon size={20} className={styles.icon} />
+                {item.name.includes('Chat') && (
+                  <div className={styles.notificationDot} />
+                )}
+              </div>
+              <span>{item.name.replace(' (Handoff)', '')}</span>
             </Link>
           );
         })}

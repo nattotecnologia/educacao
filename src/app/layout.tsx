@@ -42,7 +42,7 @@ export default async function RootLayout({
   
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`} style={{ '--accent-primary': primaryColor } as React.CSSProperties} suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         <BrandingProvider settings={settings}>
           <ThemeProvider>
             <NotificationProvider>

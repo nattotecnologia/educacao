@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 export interface Notification {
   id: string;
@@ -54,6 +55,65 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       ...prev,
     ]);
   }, []);
+
+  // Inscrição em Tempo Real para eventos IMPORTANTES
+  useEffect(() => {
+    const supabase = createClient();
+    
+    async function setupRealtime() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscar o institution_id para filtrar o Realtime (RLS cuida disso, mas é bom ter no log)
+      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+      if (!profile) return;
+
+      const instId = profile.institution_id;
+
+      const channel = supabase.channel('important_events')
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'leads',
+            filter: `institution_id=eq.${instId}`
+        }, (payload) => {
+            addNotification({
+              title: 'Novo Lead Capturado 🚀',
+              message: `${payload.new.name || 'Um novo prospecto'} acabou de entrar no funil.`,
+              type: 'success'
+            });
+        })
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages',
+            filter: `institution_id=eq.${instId}`
+        }, (payload) => {
+            const { direction, content } = payload.new;
+            
+            if (direction === 'inbound') {
+              addNotification({
+                title: 'Nova Mensagem 💬',
+                message: `Um cliente enviou: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`,
+                type: 'info'
+              });
+            } else if (direction === 'outbound_ai') {
+              addNotification({
+                title: 'Ação do Agente IA 🤖',
+                message: `O agente respondeu automaticamente ao lead.`,
+                type: 'info'
+              });
+            }
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+
+    setupRealtime();
+  }, [addNotification]);
 
   const markAsRead = useCallback((id: string) => {
     setNotifications((prev) =>

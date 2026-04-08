@@ -15,25 +15,25 @@
     width: 100%;
     position: relative;
   }
-}
 
-/* Classes para controle de visibilidade no mobile */
-.showSidebar .sidebar {
-  display: flex !important;
-  width: 100% !important;
-}
+  /* Classes para controle de visibilidade no mobile */
+  .showSidebar .sidebar {
+    display: flex !important;
+    width: 100% !important;
+  }
 
-.showSidebar .chatArea {
-  display: none !important;
-}
+  .showSidebar .chatArea {
+    display: none !important;
+  }
 
-.showChat .sidebar {
-  display: none !important;
-}
+  .showChat .sidebar {
+    display: none !important;
+  }
 
-.showChat .chatArea {
-  display: flex !important;
-  width: 100% !important;
+  .showChat .chatArea {
+    display: flex !important;
+    width: 100% !important;
+  }
 }
 
 .sidebar {
