@@ -33,20 +33,55 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Busca Leads com debounce
+  // Função de Busca de Leads MEMOIZADA para o Realtime
+  const fetchLeads = useCallback(async () => {
+    try {
+      const { data } = await leadService.getFiltered({ search: debouncedSearch, pageSize: 50 });
+      setLeads(data);
+    } catch (err) {
+      console.error('Erro ao buscar leads', err);
+    } finally {
+      setLoadingLeads(false);
+    }
+  }, [debouncedSearch]);
+
+  // Busca Leads inicial e ao mudar busca
   useEffect(() => {
-    const fetchLeads = async () => {
-      try {
-        const { data } = await leadService.getFiltered({ search: debouncedSearch, pageSize: 50 });
-        setLeads(data);
-      } catch (err) {
-        console.error('Erro ao buscar leads', err);
-      } finally {
-        setLoadingLeads(false);
+    fetchLeads();
+  }, [fetchLeads]);
+
+  // Inscrição em Tempo Real para a LISTA de LEADS (Barra Lateral)
+  useEffect(() => {
+    let channel: any;
+
+    const setupRealtimeLeads = async () => {
+      const supabase = (await import('@/utils/supabase/client')).createClient();
+      
+      const channelId = `chat_sidebar_${Math.random().toString(36).substring(7)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'leads' },
+          (payload) => {
+            console.log('Lead atualizado/inserido, recarregando lista...', payload);
+            fetchLeads();
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtimeLeads();
+
+    return () => {
+      if (channel) {
+        import('@/utils/supabase/client').then(m => {
+          const supabase = m.createClient();
+          supabase.removeChannel(channel);
+        });
       }
     };
-    fetchLeads();
-  }, [debouncedSearch]);
+  }, [fetchLeads]);
 
   // SSE para mensagens em tempo real
   useEffect(() => {

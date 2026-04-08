@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Legend
-} from 'recharts';
+import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+
+const WeeklyChart = dynamic(() => import('./components/WeeklyChart'), { 
+  ssr: false, 
+  loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}><Loader2 className="animate-spin" /></div>
+});
 import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2 } from 'lucide-react';
 import { authService } from '@/services';
 import styles from './Dashboard.module.css';
@@ -33,29 +35,69 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const profile = await authService.getProfile();
-        if (!profile?.institution_id) {
-          setError('Nenhuma instituição vinculada. Acesse as Configurações.');
-          setLoading(false);
-          return;
-        }
-        const res = await fetch(`/api/dashboard/stats?institution_id=${profile.institution_id}`);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        setStats(data);
-      } catch (err: any) {
-        setError(err.message || 'Erro ao carregar estatísticas.');
-      } finally {
+  const fetchStats = useCallback(async () => {
+    try {
+      const supabase = (await import('@/utils/supabase/client')).createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+      
+      if (!profile?.institution_id) {
+        setError('Nenhuma instituição vinculada. Acesse as Configurações.');
         setLoading(false);
+        return;
       }
+
+      const res = await fetch(`/api/dashboard/stats?institution_id=${profile.institution_id}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setStats(data);
+    } catch (err: any) {
+      console.error('Erro ao buscar stats:', err);
+      setError(err.message || 'Erro ao carregar estatísticas.');
+    } finally {
+      setLoading(false);
     }
-    fetchStats();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    let channel: any;
+
+    const setupRealtime = async () => {
+      const supabase = (await import('@/utils/supabase/client')).createClient();
+      
+      const channelId = `dashboard_stats_${Math.random().toString(36).substring(7)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'leads' },
+          () => {
+            console.log('Dados de leads mudaram, atualizando dashboard...');
+            fetchStats();
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) {
+        import('@/utils/supabase/client').then(m => {
+          const supabase = m.createClient();
+          supabase.removeChannel(channel);
+        });
+      }
+    };
+  }, [fetchStats]);
+
+  if (loading && !stats) {
     return (
       <div className={styles.container} style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh', display: 'flex' }}>
         <Loader2 className="animate-spin" size={40} />
@@ -132,20 +174,7 @@ export default function Dashboard() {
           <h3 className={styles.chartTitle}>Novas Capturas Semanais (IA vs Humano)</h3>
           {stats.weeklyChart.some(d => d.ai > 0 || d.human > 0) ? (
             <div className={styles.chartContainer}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats.weeklyChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
-                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--glass-border)', borderRadius: '8px' }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
-                  <Line type="monotone" dataKey="ai" name="Agente IA" stroke="var(--accent-secondary)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="human" name="Entrada Manual" stroke="var(--accent-primary)" strokeWidth={3} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <WeeklyChart data={stats.weeklyChart} />
             </div>
           ) : (
             <div className={styles.emptyChart}>

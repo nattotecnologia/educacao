@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       if (daysAgo <= 6) {
         const dayName = days[d.getDay()];
         if (weeklyData[dayName]) {
-          if (lead.ai_agent_id) {
+          if (lead.ai_agent_id || lead.status === 'ai_handling') {
             weeklyData[dayName].ai += 1;
           } else {
             weeklyData[dayName].human += 1;

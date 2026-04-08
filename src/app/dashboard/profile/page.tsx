@@ -112,10 +112,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} animate-in`}>
       <header className={styles.header}>
-        <h1 className={styles.title}>MY PROFILE</h1>
-        <p className={styles.subtitle}>Gerencie sua identidade e credenciais de acesso.</p>
+        <h1 className={styles.title}>Meu Perfil</h1>
+        <p className={styles.subtitle}>Gerencie suas informações pessoais e credenciais de acesso.</p>
       </header>
 
       <form onSubmit={handleSave} className={styles.glassCard}>
@@ -124,13 +124,13 @@ export default function ProfilePage() {
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt="Avatar" className={styles.avatarImage} />
             ) : (
-              <User size={48} color="var(--text-secondary)" />
+              <User size={40} color="var(--text-muted)" />
             )}
           </div>
           <div className={styles.uploadActions}>
             <label className={styles.uploadButton}>
               <Upload size={16} />
-              Trocar Imagem
+              Trocar Foto de Perfil
               <input 
                 type="file" 
                 accept="image/*" 
@@ -139,34 +139,44 @@ export default function ProfilePage() {
                 disabled={saving}
               />
             </label>
+            <p className={styles.subtitle} style={{ fontSize: '0.8rem' }}>Recomendado: JPG ou PNG de até 2MB.</p>
           </div>
         </div>
 
-        <div className={styles.formGroup}>
-          <label className={styles.label}>Nome Completo</label>
-          <input 
-            type="text" 
-            className={styles.input} 
-            value={profile.full_name} 
-            onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-            placeholder="Seu nome"
-            required
-          />
-        </div>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Nome Completo</label>
+            <div className={styles.inputWrapper}>
+              <input 
+                type="text" 
+                className={styles.input} 
+                value={profile.full_name} 
+                onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                placeholder="Ex: João Silva"
+                required
+              />
+              <User size={18} className={styles.inputIcon} />
+            </div>
+          </div>
 
-        <div className={styles.formGroup}>
-          <label className={styles.label}>Endereço de E-mail (Leitura)</label>
-          <input 
-            type="email" 
-            className={styles.input} 
-            value={profile.email} 
-            disabled
-          />
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Endereço de E-mail</label>
+            <div className={styles.inputWrapper}>
+              <input 
+                type="email" 
+                className={styles.input} 
+                value={profile.email} 
+                disabled
+                title="O e-mail não pode ser alterado."
+              />
+              <Mail size={18} className={styles.inputIcon} />
+            </div>
+          </div>
         </div>
 
         <button type="submit" className={styles.saveButton} disabled={saving}>
-          {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-          Salvar Alterações
+          {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
         </button>
       </form>
     </div>

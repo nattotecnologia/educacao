@@ -274,6 +274,28 @@ export const pipelineService = {
     
     if (error) throw error;
     return data;
+  },
+  
+  async updateStage(stageId: string, payload: { name?: string; color?: string; order?: number }) {
+    const { data, error } = await supabase
+      .from('pipeline_stages')
+      .update(payload)
+      .eq('id', stageId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteStage(stageId: string) {
+    const { error } = await supabase
+      .from('pipeline_stages')
+      .delete()
+      .eq('id', stageId);
+    
+    if (error) throw error;
+    return true;
   }
 };
 
