@@ -32,6 +32,51 @@ function verifyWebhookSignature(request: NextRequest, body: string): boolean {
 }
 
 /**
+ * Monta o system prompt final combinando um prefixo de estilo de comunicação
+ * com o prompt personalizado do agente.
+ *
+ * O prefixo de estilo PRECEDE o prompt do usuário porque LLMs tendem a
+ * obedecer instruções no início do contexto com mais consistência.
+ */
+function buildSystemPrompt(agentSystemPrompt: string, style: string): string {
+  const stylePrefix: Record<string, string> = {
+    whatsapp: [
+      'REGRAS DE COMUNICAÇÃO (OBRIGATÓRIO — nunca ignore):',
+      '- Você está respondendo no WhatsApp. Seja humano, não um robô.',
+      '- Use emojis relevantes em TODAS as mensagens, sem exceção. 😊',
+      '- MÁXIMO 2 frases curtas por mensagem. Nunca escreva parágrafos longos.',
+      '- Tom descontraído e amigável, como se fosse um amigo ajudando.',
+      '- Nunca use linguagem corporativa ou técnica demais.',
+      '- Se tiver mais de um assunto, quebre em mensagens diferentes com \\n.',
+      '- Vá direto ao ponto. Sem introduções desnecessárias.',
+      '',
+      'MISSÃO DO AGENTE:',
+    ].join('\n'),
+    casual: [
+      'ESTILO (OBRIGATÓRIO):',
+      '- Tom informal e amigável, como numa conversa entre colegas.',
+      '- Respostas curtas e diretas. Máximo 3 frases.',
+      '- Pode usar emojis quando fizer sentido. 👍',
+      '- Sem linguagem corporativa.',
+      '',
+      'MISSÃO DO AGENTE:',
+    ].join('\n'),
+    formal: [
+      'ESTILO (OBRIGATÓRIO):',
+      '- Tom profissional e respeitoso.',
+      '- Linguagem clara e objetiva, sem gírias.',
+      '- Respostas completas mas sem prolixidade.',
+      '',
+      'MISSÃO DO AGENTE:',
+    ].join('\n'),
+    default: '',
+  };
+
+  const prefix = stylePrefix[style] || '';
+  return prefix ? `${prefix}\n${agentSystemPrompt}` : agentSystemPrompt;
+}
+
+/**
  * Envia texto para o WhatsApp via Evolution API.
  * Se enable_line_breaks=true, divide a mensagem por \n\n e envia cada parte com delay.
  */
@@ -354,11 +399,25 @@ export async function POST(request: NextRequest) {
     // 12. Chama a IA usando configs do agente (com fallback para a instituição)
     const model = agent.ai_model_override || institution.ai_model || 'gpt-4o';
     const temperature = agent.temperature ?? 0.7;
-    const maxTokens = agent.max_tokens ?? 500;
+    const commStyle = agent.communication_style || 'default';
+
+    // WhatsApp e Casual forçam um teto de tokens para evitar respostas longas
+    const STYLE_TOKEN_CAPS: Record<string, number> = {
+      whatsapp: 200,
+      casual: 300,
+      formal: 500,
+      default: 500,
+    };
+    const styleCap = STYLE_TOKEN_CAPS[commStyle] ?? 500;
+    const maxTokens = Math.min(agent.max_tokens ?? styleCap, styleCap);
+
+    // Monta o system prompt com o prefixo de estilo
+    const fullSystemPrompt = buildSystemPrompt(agent.system_prompt || '', commStyle);
 
     console.log(
-      `[Webhook] Chamando IA (${provider}) | Modelo: ${model} | Temp: ${temperature} | Tokens: ${maxTokens}`
+      `[Webhook] Chamando IA (${provider}) | Modelo: ${model} | Temp: ${temperature} | Tokens: ${maxTokens} | Estilo: ${commStyle}`
     );
+    console.log(`[Webhook] System prompt (${fullSystemPrompt.length} chars): "${fullSystemPrompt.substring(0, 120)}..."`);
 
     const customOpenAI = new OpenAI({ apiKey, baseURL });
 
@@ -368,12 +427,13 @@ export async function POST(request: NextRequest) {
       const aiResponse = await customOpenAI.chat.completions.create({
         model,
         messages: [
-          { role: 'system', content: agent.system_prompt },
+          { role: 'system', content: fullSystemPrompt },
           ...chatHistory,
         ] as any[],
         temperature,
         max_tokens: maxTokens,
       });
+
 
       botMessage =
         aiResponse.choices[0]?.message?.content ||

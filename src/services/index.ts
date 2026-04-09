@@ -115,12 +115,14 @@ export const leadService = {
 };
 
 export type AgentRole = 'reception' | 'sdr' | 'followup' | 'support' | 'custom';
+export type CommunicationStyle = 'default' | 'whatsapp' | 'casual' | 'formal';
 
 export interface AgentPayload {
   name: string;
   system_prompt: string;
   status: 'active' | 'inactive' | 'training';
   agent_role?: AgentRole;
+  communication_style?: CommunicationStyle;
   temperature?: number;
   max_tokens?: number;
   ai_model_override?: string;

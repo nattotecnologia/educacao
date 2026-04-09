@@ -7,7 +7,8 @@ import {
   Thermometer, Hash, Cpu, MessageCircle, Zap, Star,
   AlignLeft, Clock, ToggleRight, Info
 } from 'lucide-react';
-import { agentService, AgentRole, AgentPayload } from '@/services';
+import { agentService, AgentRole, AgentPayload, CommunicationStyle } from '@/services';
+import { CommunicationStylePicker } from '../components/CommunicationStylePicker';
 
 const ROLE_OPTIONS: { value: AgentRole; label: string; emoji: string; description: string }[] = [
   { value: 'reception', label: 'Recepção', emoji: '🤝', description: '1º contato, boas-vindas e triagem de leads' },
@@ -22,6 +23,7 @@ const DEFAULT_FORM: AgentPayload = {
   system_prompt: '',
   status: 'active',
   agent_role: 'custom',
+  communication_style: 'whatsapp',
   temperature: 0.7,
   max_tokens: 500,
   ai_model_override: '',
@@ -56,6 +58,7 @@ export default function EditAgentPage() {
           system_prompt: data.system_prompt || '',
           status: data.status || 'active',
           agent_role: data.agent_role || 'custom',
+          communication_style: data.communication_style || 'whatsapp',
           temperature: data.temperature ?? 0.7,
           max_tokens: data.max_tokens ?? 500,
           ai_model_override: data.ai_model_override || '',
@@ -225,6 +228,18 @@ export default function EditAgentPage() {
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{role.description}</div>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Estilo de Comunicação */}
+            <div>
+              <label style={s.label}>Estilo de Comunicação</label>
+              <p style={s.hint}>Define como a IA se expressa — independente do system prompt.</p>
+              <div style={{ marginTop: '0.5rem' }}>
+                <CommunicationStylePicker
+                  value={(form.communication_style || 'default') as CommunicationStyle}
+                  onChange={(v) => set('communication_style', v)}
+                />
               </div>
             </div>
 
