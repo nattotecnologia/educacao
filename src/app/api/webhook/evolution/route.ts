@@ -13,13 +13,13 @@ export const runtime = 'nodejs';
 
 function verifyWebhookSignature(request: NextRequest, body: string): boolean {
   if (!WEBHOOK_SECRET || WEBHOOK_SECRET === 'your_webhook_secret_here') {
-    console.warn('[Webhook] Aviso: EVOLUTION_WEBHOOK_SECRET não configurado. Aceitando requisição sem validação HMAC (Modo Permissivo).');
+    console.warn('[Webhook] Aviso: EVOLUTION_WEBHOOK_SECRET não configurado. Aceitando sem validação HMAC (Modo Permissivo).');
     return true;
   }
 
   const signature = request.headers.get('x-evol-signature');
   if (!signature) {
-    console.warn('[Webhook] Aviso: Assinatura HMAC ausente no cabeçalho (x-evol-signature), mas EVOLUTION_WEBHOOK_SECRET está configurado. Aceitando por compatibilidade (Verifique as configs da Evolution API).');
+    console.warn('[Webhook] Aviso: Assinatura HMAC ausente no cabeçalho. Aceitando por compatibilidade.');
     return true;
   }
 
@@ -31,6 +31,75 @@ function verifyWebhookSignature(request: NextRequest, body: string): boolean {
   return signature === expectedSignature;
 }
 
+/**
+ * Envia texto para o WhatsApp via Evolution API.
+ * Se enable_line_breaks=true, divide a mensagem por \n\n e envia cada parte com delay.
+ */
+async function sendEvolutionMessage(
+  evoUrl: string,
+  evoKey: string,
+  instanceName: string,
+  phoneNumber: string,
+  text: string,
+  enableLineBreaks: boolean,
+  delayMs: number
+): Promise<void> {
+  const baseDelay = Math.max(300, Math.min(delayMs, 5000));
+
+  if (enableLineBreaks) {
+    // Divide por \n\n (dois newlines) OU por \n simples — LLMs usam ambos
+    const parts = text
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    console.log(`[Webhook] Quebra de linha ATIVA — ${parts.length} parte(s) para enviar`);
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const partDelay = i === 0 ? 1200 : baseDelay;
+
+      console.log(`[Webhook] Enviando parte ${i + 1}/${parts.length}: "${part.substring(0, 40)}..."`);
+
+      const sendRes = await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: evoKey,
+        },
+        body: JSON.stringify({
+          number: phoneNumber,
+          text: part,
+          delay: partDelay,
+        }),
+      });
+
+      if (!sendRes.ok) {
+        const errText = await sendRes.text();
+        console.error(`[Webhook] Erro ao enviar parte ${i + 1}:`, errText);
+      }
+
+      // Aguarda entre partes para parecer mais natural
+      if (i < parts.length - 1) {
+        await new Promise((r) => setTimeout(r, baseDelay));
+      }
+    }
+  } else {
+    await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: evoKey,
+      },
+      body: JSON.stringify({
+        number: phoneNumber,
+        text,
+        delay: 1200,
+      }),
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const { success } = await rateLimit(request);
   if (!success) {
@@ -38,26 +107,26 @@ export async function POST(request: NextRequest) {
   }
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-  
+
   console.log(`[Webhook] Recebida requisição POST às ${new Date().toISOString()}`);
-  
+
   const bodyText = await request.text();
   console.log(`[Webhook] Body length: ${bodyText.length} bytes`);
-  
+
   if (!verifyWebhookSignature(request, bodyText)) {
-    console.error('[Webhook] Erro: Assinatura HMAC inválida. Verifique o EVOLUTION_WEBHOOK_SECRET.');
+    console.error('[Webhook] Erro: Assinatura HMAC inválida.');
     return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
   }
-  console.log('[Webhook] Assinatura validada com sucesso.');
 
   try {
     const payload = JSON.parse(bodyText);
-    const instanceName = payload.instance; 
+    const instanceName = payload.instance;
     const event = payload.event;
 
     console.log('[Webhook] FULL PAYLOAD:', JSON.stringify(payload, null, 2));
-    console.log(`[Webhook] Processando instância: ${instanceName} | Evento: ${event}`);
-    
+    console.log(`[Webhook] Instância: ${instanceName} | Evento: ${event}`);
+
+    // 1. Identifica a Instituição
     const { data: institution, error: instError } = await supabaseAdmin
       .from('institutions')
       .select('*')
@@ -65,57 +134,63 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (instError || !institution) {
-      console.error(`[Webhook] Erro: Instituição não encontrada para a instância "${instanceName}"`);
+      console.error(`[Webhook] Instituição não encontrada para "${instanceName}"`);
       return NextResponse.json({ error: 'Institution_Not_Found' }, { status: 404 });
     }
-    console.log(`[Webhook] Instituição identificada: ${institution.name} (ID: ${institution.id})`);
+    console.log(`[Webhook] Instituição: ${institution.name} (ID: ${institution.id})`);
 
-    // 2. Trata Eventos de Conexão (Sync de Status)
+    // 2. Trata Eventos de Conexão
     if (event === 'connection.update') {
       const state = payload.data?.state;
       const newStatus = state === 'open' ? 'connected' : 'disconnected';
-      
+
       await supabaseAdmin
         .from('institutions')
         .update({ whatsapp_status: newStatus })
         .eq('id', institution.id);
-      
+
       return NextResponse.json({ success: true, event: 'status_updated' });
     }
 
-    // 3. Trata Mensagens Recebidas (Lógica de Chat/IA)
+    // 3. Filtra mensagens irrelevantes
     if (!payload.data?.message || payload.data?.key?.fromMe) {
-      console.log('[Webhook] Info: Ignorando mensagem (formatada ou enviada por mim)');
+      console.log('[Webhook] Ignorando mensagem (sem conteúdo ou enviada por mim)');
       return NextResponse.json({ success: true, reason: 'ignored' });
     }
 
-    const incomingText = payload.data.message.conversation || payload.data.message.extendedTextMessage?.text || '';
+    const incomingText =
+      payload.data.message.conversation ||
+      payload.data.message.extendedTextMessage?.text ||
+      '';
+
     const phoneRemoteJid = payload.data.key.remoteJid;
     const remoteJidAlt = payload.data.key.remoteJidAlt;
-    const sender = payload.sender; // Fallback da Evolution API
+    const sender = payload.sender;
 
     let phoneNumber = phoneRemoteJid.split('@')[0];
-    
-    // Se for um LID, tenta pegar o número real no Alt ou no Sender
+
     if (phoneRemoteJid.includes('@lid')) {
-        if (remoteJidAlt) {
-            phoneNumber = remoteJidAlt.split('@')[0];
-        } else if (sender) {
-            phoneNumber = sender.split('@')[0];
-        }
+      if (remoteJidAlt) {
+        phoneNumber = remoteJidAlt.split('@')[0];
+      } else if (sender) {
+        phoneNumber = sender.split('@')[0];
+      }
     }
-    
+
     const pushName = payload.data.pushName || 'Lead WhatsApp';
     console.log(`[Webhook] Mensagem de ${pushName} | Número: ${phoneNumber}`);
 
     if (!incomingText) return NextResponse.json({ success: true, reason: 'no_text' });
 
+    // 4. Busca ou cria o Lead
     let { data: lead } = await supabaseAdmin
       .from('leads')
       .select('*')
       .eq('phone', phoneNumber)
       .eq('institution_id', institution.id)
       .single();
+
+    const isNewLead = !lead;
 
     if (!lead) {
       const { data: newLead, error: leadError } = await supabaseAdmin
@@ -124,7 +199,7 @@ export async function POST(request: NextRequest) {
           phone: phoneNumber,
           institution_id: institution.id,
           name: pushName,
-          status: 'ai_handling'
+          status: 'ai_handling',
         })
         .select()
         .single();
@@ -134,46 +209,103 @@ export async function POST(request: NextRequest) {
 
     if (!lead) return NextResponse.json({ error: 'Lead_Not_Created' }, { status: 500 });
 
+    // 5. Salva mensagem inbound
     await supabaseAdmin.from('messages').insert({
       lead_id: lead.id,
       institution_id: institution.id,
       direction: 'inbound',
-      content: incomingText
+      content: incomingText,
     });
 
-    if (lead.status === 'human_handling') {
+    // 6. Verifica se está em atendimento humano
+    if (lead.status === 'human_handling' || lead.human_handling) {
+      console.log(`[Webhook] Atendimento humano ativo para ${lead.name}. IA ignorando.`);
       return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
     }
 
-    const { data: agent, error: agentError } = await supabaseAdmin
+    // 7. Busca o Agente de IA — usa queries SEPARADAS para evitar mutação do builder
+    // Tenta primeiro o agente marcado como padrão
+    const { data: defaultAgent } = await supabaseAdmin
       .from('ai_agents')
-      .select('id, system_prompt')
+      .select('*')
       .eq('institution_id', institution.id)
       .eq('status', 'active')
+      .eq('is_default', true)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (agentError || !agent) {
-      console.warn('[Webhook] Aviso: Nenhum agente de IA ativo encontrado para esta instituição.');
+    // Se não houver padrão, pega o primeiro agente ativo
+    const { data: firstActiveAgent } = defaultAgent
+      ? { data: null }
+      : await supabaseAdmin
+          .from('ai_agents')
+          .select('*')
+          .eq('institution_id', institution.id)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
+
+    const agent = defaultAgent || firstActiveAgent;
+    console.log(`[Webhook] Agente resolvido: is_default=${defaultAgent ? 'true' : 'false'} | enable_line_breaks=${agent?.enable_line_breaks} | id=${agent?.id}`);
+
+    if (!agent) {
+      console.warn('[Webhook] Nenhum agente de IA ativo encontrado para esta instituição.');
       return NextResponse.json({ success: true, reason: 'no_active_agent' });
     }
-    console.log(`[Webhook] Agente ativo [${agent.id}] e Lead [${lead.name}] identificados.`);
+    console.log(`[Webhook] Agente: "${agent.name}" | Papel: ${agent.agent_role || 'custom'}`);
 
-    if (lead.human_handling) {
-      console.log(`[Webhook] Atendimento humano ATIVO para o lead ${lead.name}. IA ignorando mensagem.`);
-      return NextResponse.json({ success: true, reason: 'human_handling_active' });
+    // 8. Preparar Evolution API
+    const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
+    const decryptedEvoKey = institution.evolution_api_key
+      ? decrypt(institution.evolution_api_key)
+      : '';
+    const evoKey =
+      decryptedEvoKey ||
+      process.env.EVOLUTION_GLOBAL_APIKEY ||
+      process.env.EVOLUTION_INSTANCE_TOKEN ||
+      '';
+
+    if (!evoKey) {
+      console.error('[Webhook] Nenhuma chave da Evolution API configurada.');
     }
 
+    // 9. Envia greeting message para novo lead (se configurado no agente)
+    if (isNewLead && agent.greeting_message) {
+      console.log(`[Webhook] Enviando mensagem de boas-vindas para ${phoneNumber}`);
+      await sendEvolutionMessage(
+        evoUrl,
+        evoKey,
+        instanceName,
+        phoneNumber,
+        agent.greeting_message,
+        agent.enable_line_breaks ?? false,
+        agent.response_delay_ms ?? 800
+      );
+
+      await supabaseAdmin.from('messages').insert({
+        lead_id: lead.id,
+        institution_id: institution.id,
+        direction: 'outbound_ai',
+        content: agent.greeting_message,
+      });
+    }
+
+    // 10. Resolve provedor e API Key (agente tem prioridade, senão herda da instituição)
     const provider = institution.ai_provider || 'openai';
-    console.log(`[Webhook] Gerando resposta com provedor: ${provider}`);
     let apiKey: string | undefined;
 
     if (provider === 'openai') {
-      apiKey = institution.openai_key ? decrypt(institution.openai_key) : process.env.OPENAI_API_KEY;
+      apiKey = institution.openai_key
+        ? decrypt(institution.openai_key)
+        : process.env.OPENAI_API_KEY;
     } else if (provider === 'groq') {
-      apiKey = institution.groq_key ? decrypt(institution.groq_key) : process.env.GROQ_API_KEY;
+      apiKey = institution.groq_key
+        ? decrypt(institution.groq_key)
+        : process.env.GROQ_API_KEY;
     } else if (provider === 'openrouter') {
-      apiKey = institution.openrouter_key ? decrypt(institution.openrouter_key) : process.env.OPENROUTER_API_KEY;
+      apiKey = institution.openrouter_key
+        ? decrypt(institution.openrouter_key)
+        : process.env.OPENROUTER_API_KEY;
     } else {
       apiKey = institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined;
     }
@@ -183,79 +315,114 @@ export async function POST(request: NextRequest) {
       if (provider === 'openrouter') baseURL = 'https://openrouter.ai/api/v1';
       if (provider === 'groq') baseURL = 'https://api.groq.com/openai/v1';
     }
-    console.log(`[Webhook] Usando baseURL: ${baseURL || 'OpenAI Default'}`);
 
     if (!apiKey) {
-      console.error('Nenhuma API Key configurada para o provedor:', provider);
+      console.error('[Webhook] Nenhuma API Key configurada para o provedor:', provider);
+
+      // Usa fallback message do agente se disponível
+      const fallback =
+        agent.fallback_message ||
+        'Desculpe, estou com dificuldades técnicas no momento. Um atendente irá te ajudar em breve.';
+
+      await sendEvolutionMessage(
+        evoUrl,
+        evoKey,
+        instanceName,
+        phoneNumber,
+        fallback,
+        false,
+        800
+      );
+
       return NextResponse.json({ success: true, reason: 'no_api_key_configured' });
     }
 
-    const customOpenAI = new OpenAI({ apiKey, baseURL });
-    const model = institution.ai_model || 'gpt-4o';
-    console.log(`[Webhook] Chamando IA (${provider}) - Modelo: ${model}`);
-
+    // 11. Monta histórico de mensagens (respeitando max_history_messages do agente)
+    const historyLimit = agent.max_history_messages ?? 10;
     const { data: history } = await supabaseAdmin
       .from('messages')
       .select('direction, content')
       .eq('lead_id', lead.id)
       .order('created_at', { ascending: false })
-      .limit(10);
-      
+      .limit(historyLimit);
+
     const chatHistory = (history || []).reverse().map((msg: any) => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
-      content: msg.content
+      content: msg.content,
     }));
 
-    const aiResponse = await customOpenAI.chat.completions.create({
-      model: institution.ai_model || 'gpt-4o', 
-      messages: [
-        { role: 'system', content: agent.system_prompt },
-        ...chatHistory,
-      ] as any[],
-      temperature: 0.7,
-    });
+    // 12. Chama a IA usando configs do agente (com fallback para a instituição)
+    const model = agent.ai_model_override || institution.ai_model || 'gpt-4o';
+    const temperature = agent.temperature ?? 0.7;
+    const maxTokens = agent.max_tokens ?? 500;
 
-    const botMessage = aiResponse.choices[0]?.message?.content || 'Desculpe, tive um erro ao processar.';
-    console.log(`[Webhook] IA respondeu: "${botMessage.substring(0, 50)}..."`);
+    console.log(
+      `[Webhook] Chamando IA (${provider}) | Modelo: ${model} | Temp: ${temperature} | Tokens: ${maxTokens}`
+    );
 
+    const customOpenAI = new OpenAI({ apiKey, baseURL });
+
+    let botMessage: string;
+
+    try {
+      const aiResponse = await customOpenAI.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: agent.system_prompt },
+          ...chatHistory,
+        ] as any[],
+        temperature,
+        max_tokens: maxTokens,
+      });
+
+      botMessage =
+        aiResponse.choices[0]?.message?.content ||
+        agent.fallback_message ||
+        'Desculpe, tive um problema ao processar sua mensagem.';
+    } catch (aiError: any) {
+      console.error('[Webhook] Erro ao chamar IA:', aiError.message);
+
+      botMessage =
+        agent.fallback_message ||
+        'Desculpe, estou com dificuldades no momento. Um atendente irá te ajudar em breve.';
+    }
+
+    console.log(`[Webhook] IA respondeu: "${botMessage.substring(0, 80)}..."`);
+
+    // 13. Salva resposta da IA no histórico
     const { error: insertError } = await supabaseAdmin.from('messages').insert({
       lead_id: lead.id,
       institution_id: institution.id,
       direction: 'outbound_ai',
-      content: botMessage
+      content: botMessage,
     });
 
     if (insertError) {
-      console.error('[Webhook] Erro ao inserir mensagem da IA no banco:', insertError);
-    }
-    console.log('[Webhook] Resposta da IA salva no histórico.');
-
-    const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
-    const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : '';
-    const evoKey = decryptedEvoKey || process.env.EVOLUTION_GLOBAL_APIKEY || process.env.EVOLUTION_INSTANCE_TOKEN || '';
-
-    if (!evoKey) {
-        console.error('Nenhuma chave da Evolution API configurada.');
+      console.error('[Webhook] Erro ao salvar resposta da IA:', insertError);
     }
 
-    await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': evoKey
-      },
-      body: JSON.stringify({
-        number: phoneNumber,
-        text: botMessage,
-        delay: 1200
-      })
-    });
-    console.log(`[Webhook] Sucesso: Mensagem enviada para ${phoneNumber}`);
+    // 14. Envia resposta (com ou sem quebra de linha)
+    const enableLineBreaks = agent.enable_line_breaks ?? false;
+    const responseDelay = agent.response_delay_ms ?? 800;
+
+    await sendEvolutionMessage(
+      evoUrl,
+      evoKey,
+      instanceName,
+      phoneNumber,
+      botMessage,
+      enableLineBreaks,
+      responseDelay
+    );
+
+    console.log(`[Webhook] ✅ Mensagem enviada para ${phoneNumber} | Quebra de linha: ${enableLineBreaks}`);
 
     return NextResponse.json({ success: true, ai_handled: true });
-    
   } catch (error: any) {
     console.error('[Webhook] ERRO CRÍTICO:', error.stack || error.message || error);
-    return NextResponse.json({ error: 'Internal_Server_Error', details: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal_Server_Error', details: error.message },
+      { status: 500 }
+    );
   }
 }

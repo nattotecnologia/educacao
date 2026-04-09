@@ -114,13 +114,31 @@ export const leadService = {
   }
 };
 
+export type AgentRole = 'reception' | 'sdr' | 'followup' | 'support' | 'custom';
+
+export interface AgentPayload {
+  name: string;
+  system_prompt: string;
+  status: 'active' | 'inactive' | 'training';
+  agent_role?: AgentRole;
+  temperature?: number;
+  max_tokens?: number;
+  ai_model_override?: string;
+  enable_line_breaks?: boolean;
+  response_delay_ms?: number;
+  max_history_messages?: number;
+  greeting_message?: string;
+  fallback_message?: string;
+  is_default?: boolean;
+}
+
 export const agentService = {
   async getAll() {
     const { data, error } = await supabase
       .from('ai_agents')
       .select('*')
       .order('name');
-    
+
     if (error) throw error;
     return data;
   },
@@ -135,11 +153,11 @@ export const agentService = {
     return data;
   },
 
-  async create(agentPartial: any) {
+  async create(agentPartial: AgentPayload) {
     const profile = await authService.getProfile();
     const payload = {
       ...agentPartial,
-      institution_id: profile.institution_id
+      institution_id: profile.institution_id,
     };
 
     const { data, error } = await supabase
@@ -147,12 +165,12 @@ export const agentService = {
       .insert(payload)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
 
-  async update(id: string, payload: any) {
+  async update(id: string, payload: Partial<AgentPayload>) {
     const { data, error } = await supabase
       .from('ai_agents')
       .update(payload)
@@ -164,10 +182,7 @@ export const agentService = {
   },
 
   async delete(id: string) {
-    const { error } = await supabase
-      .from('ai_agents')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('ai_agents').delete().eq('id', id);
     if (error) throw error;
     return true;
   },
@@ -180,10 +195,22 @@ export const agentService = {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
-  }
+  },
+
+  async setDefault(id: string) {
+    const { data, error } = await supabase
+      .from('ai_agents')
+      .update({ is_default: true })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
 };
 
 export const messageService = {
