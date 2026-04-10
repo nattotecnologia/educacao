@@ -6,7 +6,9 @@ import {
   ExternalLink, LogOut, ShieldCheck, Zap
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { getInstitutionSettings, updateInstitutionSettings } from '../settings/actions';
 import styles from './WhatsApp.module.css';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
@@ -16,6 +18,13 @@ export default function WhatsAppPage() {
   const [connectionStatus, setConnectionStatus] = useState<'open' | 'close' | 'connecting' | 'none'>('none');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [manualConfig, setManualConfig] = useState<{ manualMode: boolean; instanceName: string | null } | null>(null);
+  const { addNotification } = useNotification();
+
+  const [settings, setSettings] = useState({
+    evolution_instance_name: '',
+    evolution_api_key: ''
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const supabase = createClient();
 
@@ -23,45 +32,24 @@ export default function WhatsAppPage() {
   useEffect(() => {
     async function init() {
       try {
+        const instData = await getInstitutionSettings();
+        if (instData) {
+          setInstitution(instData);
+          setSettings({
+            evolution_instance_name: instData.evolution_instance_name || '',
+            evolution_api_key: instData.evolution_api_key || ''
+          });
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('institution_id')
-            .eq('id', user.id)
-            .single();
-          
-          const profileData = profile as { institution_id: string } | null;
-
-          if (!profileData?.institution_id) {
-            setErrorMsg('Seu perfil não está vinculado a uma instituição.');
-            setLoading(false);
-            return;
-          }
-
-          const { data: inst } = await supabase
-            .from('institutions')
-            .select('*')
-            .eq('id', profileData.institution_id)
-            .single();
-          
-          const institutionData = inst as any;
-          
-          if (!institutionData) {
-            setErrorMsg('Instituição não encontrada.');
-            setLoading(false);
-            return;
-          }
-
-          setInstitution(institutionData);
-
           // Verifica se o servidor já tem dados manuais configurados (Modo Manual)
           const configRes = await fetch('/api/evolution?action=config');
           const configData = await configRes.json();
           setManualConfig(configData);
 
-          if (configData.manualMode || inst.evolution_instance_name) {
-            checkStatus(configData.instanceName || inst.evolution_instance_name);
+          if (configData.manualMode || instData?.evolution_instance_name) {
+            checkStatus(configData.instanceName || instData?.evolution_instance_name);
           }
         }
       } catch (err) {
@@ -131,6 +119,30 @@ export default function WhatsAppPage() {
       setErrorMsg(err.message || 'Erro inesperado ao conectar.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await updateInstitutionSettings({
+        ...institution,
+        evolution_instance_name: settings.evolution_instance_name,
+        evolution_api_key: settings.evolution_api_key
+      });
+      setInstitution((prev: any) => ({
+        ...prev,
+        evolution_instance_name: settings.evolution_instance_name,
+        evolution_api_key: settings.evolution_api_key
+      }));
+      addNotification({ type: 'success', title: 'Sucesso', message: 'Configurações de conexão atualizadas.' });
+      if (settings.evolution_instance_name) {
+        checkStatus(settings.evolution_instance_name);
+      }
+    } catch (err: any) {
+      addNotification({ type: 'error', title: 'Erro', message: err.message || 'Falha ao salvar.' });
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -220,6 +232,42 @@ export default function WhatsAppPage() {
               <li>Clique em <strong>Conectar um aparelho</strong></li>
               <li>Aponte a câmera para o QR Code ao lado</li>
             </ol>
+          </div>
+
+          <div className={`glass-panel ${styles.settingsCard}`} style={{ marginTop: '1.5rem', padding: '1.5rem' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem', marginBottom: '1rem' }}>
+              <ShieldCheck size={18} /> Configurações Técnicas
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Instância</label>
+                <input 
+                  type="text"
+                  value={settings.evolution_instance_name}
+                  onChange={(e) => setSettings({...settings, evolution_instance_name: e.target.value})}
+                  placeholder="Nome da instância"
+                  style={{ width: '100%', padding: '0.65rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>API API Key</label>
+                <input 
+                  type="password"
+                  value={settings.evolution_api_key}
+                  onChange={(e) => setSettings({...settings, evolution_api_key: e.target.value})}
+                  placeholder="Seu Token Evolution"
+                  style={{ width: '100%', padding: '0.65rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+                />
+              </div>
+              <button 
+                className="custom-button" 
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                style={{ width: '100%', padding: '0.65rem', fontSize: '0.875rem' }}
+              >
+                {savingSettings ? <Loader2 className="animate-spin" size={16} /> : 'Salvar Configuração'}
+              </button>
+            </div>
           </div>
         </aside>
       </div>

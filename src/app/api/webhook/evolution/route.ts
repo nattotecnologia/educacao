@@ -38,42 +38,97 @@ function verifyWebhookSignature(request: NextRequest, body: string): boolean {
  * O prefixo de estilo PRECEDE o prompt do usuário porque LLMs tendem a
  * obedecer instruções no início do contexto com mais consistência.
  */
-function buildSystemPrompt(agentSystemPrompt: string, style: string): string {
+/**
+ * Busca dados dinâmicos do sistema (Cursos e Turmas) para servir de Base de Conhecimento.
+ */
+async function fetchKnowledgeBase(supabase: any, institutionId: string): Promise<string> {
+  const [coursesRes, classesRes] = await Promise.all([
+    supabase
+      .from('courses')
+      .select('name, description, price, modality')
+      .eq('institution_id', institutionId)
+      .eq('is_active', true),
+    supabase
+      .from('classes')
+      .select('name, schedule, start_date, status, course_id')
+      .eq('institution_id', institutionId)
+      .eq('status', 'open')
+  ]);
+
+  const courses = coursesRes.data || [];
+  const classes = classesRes.data || [];
+
+  if (courses.length === 0 && classes.length === 0) return '';
+
+  const contextLines = [
+    '### BASE DE CONHECIMENTO DA INSTITUIÇÃO (DADOS REAIS DO SISTEMA)',
+    'Use APENAS estas informações para responder sobre cursos e vagas:',
+    '',
+    'CURSOS DISPONÍVEIS:',
+  ];
+
+  courses.forEach((c: any) => {
+    contextLines.push(`- ${c.name}: ${c.description || 'Sem descrição'}. Preço: R$ ${c.price || 'Sob consulta'}. Modalidade: ${c.modality}.`);
+  });
+
+  if (classes.length > 0) {
+    contextLines.push('', 'TURMAS E VAGAS ABERTAS:');
+    classes.forEach((cl: any) => {
+      const course = courses.find((c: any) => c.id === cl.course_id);
+      contextLines.push(`- Turma ${cl.name}${course ? ` (do curso ${course.name})` : ''}: Horário ${cl.schedule || 'A combinar'}. Começa em: ${cl.start_date || 'TBD'}.`);
+    });
+  }
+
+  return contextLines.join('\n');
+}
+
+/**
+ * Monta o system prompt final combinando um prefixo de estilo de comunicação,
+ * as restrições rígidas de escopo e a base de conhecimento dinâmica.
+ */
+function buildSystemPrompt(agentSystemPrompt: string, style: string, knowledgeBase: string): string {
+  const guardrails = [
+    '⚠️ DIRETRIZES DE SEGURANÇA E FOCO (ESTRITO):',
+    '1. Você é um assistente virtual da instituição. Seu conhecimento é LIMITADO à "BASE DE CONHECIMENTO" abaixo.',
+    '2. NUNCA responda sobre assuntos externos (política, previsão do tempo, outras empresas, receitas, conselhos gerais, etc).',
+    '3. Se o usuário perguntar algo fora do escopo do sistema, responda educadamente: "Desculpe, como assistente virtual desta instituição, só posso ajudar com informações sobre nossos cursos e atendimentos oficiais."',
+    '4. NUNCA invente preços, horários ou cursos. Se não estiver na lista, você não sabe.',
+    '5. Mantenha o foco absoluto em converter o interessado em aluno ou agendar uma visita.',
+    '',
+  ].join('\n');
+
   const stylePrefix: Record<string, string> = {
     whatsapp: [
-      'REGRAS DE COMUNICAÇÃO (OBRIGATÓRIO — nunca ignore):',
-      '- Você está respondendo no WhatsApp. Seja humano, não um robô.',
-      '- Use emojis relevantes em TODAS as mensagens, sem exceção. 😊',
-      '- MÁXIMO 2 frases curtas por mensagem. Nunca escreva parágrafos longos.',
-      '- Tom descontraído e amigável, como se fosse um amigo ajudando.',
-      '- Nunca use linguagem corporativa ou técnica demais.',
-      '- Se tiver mais de um assunto, quebre em mensagens diferentes com \\n.',
-      '- Vá direto ao ponto. Sem introduções desnecessárias.',
+      'REGRAS DE COMUNICAÇÃO:',
+      '- Responda no WhatsApp. Seja humano e empático.',
+      '- Use emojis relevantes. 😊',
+      '- MÁXIMO 2 frases curtas por mensagem.',
+      '- Tom descontraído e amigável.',
+      '- Vá direto ao ponto.',
       '',
-      'MISSÃO DO AGENTE:',
     ].join('\n'),
     casual: [
-      'ESTILO (OBRIGATÓRIO):',
-      '- Tom informal e amigável, como numa conversa entre colegas.',
-      '- Respostas curtas e diretas. Máximo 3 frases.',
-      '- Pode usar emojis quando fizer sentido. 👍',
-      '- Sem linguagem corporativa.',
+      'ESTILO: Informal e amigável. Respostas curtas.',
       '',
-      'MISSÃO DO AGENTE:',
     ].join('\n'),
     formal: [
-      'ESTILO (OBRIGATÓRIO):',
-      '- Tom profissional e respeitoso.',
-      '- Linguagem clara e objetiva, sem gírias.',
-      '- Respostas completas mas sem prolixidade.',
+      'ESTILO: Profissional, claro e respeitoso.',
       '',
-      'MISSÃO DO AGENTE:',
     ].join('\n'),
     default: '',
   };
 
   const prefix = stylePrefix[style] || '';
-  return prefix ? `${prefix}\n${agentSystemPrompt}` : agentSystemPrompt;
+  
+  return [
+    guardrails,
+    prefix,
+    '---',
+    'MISSÃO PERSONALIZADA DO AGENTE:',
+    agentSystemPrompt,
+    '',
+    knowledgeBase ? knowledgeBase : '--- Nenhuma base de conhecimento específica carregada no momento ---'
+  ].join('\n');
 }
 
 /**
@@ -396,6 +451,9 @@ export async function POST(request: NextRequest) {
       content: msg.content,
     }));
 
+    // 11.5 Busca Base de Conhecimento Dinâmica do Sistema
+    const knowledgeBase = await fetchKnowledgeBase(supabaseAdmin, institution.id);
+
     // 12. Chama a IA usando configs do agente (com fallback para a instituição)
     const model = agent.ai_model_override || institution.ai_model || 'gpt-4o';
     const temperature = agent.temperature ?? 0.7;
@@ -411,8 +469,12 @@ export async function POST(request: NextRequest) {
     const styleCap = STYLE_TOKEN_CAPS[commStyle] ?? 500;
     const maxTokens = Math.min(agent.max_tokens ?? styleCap, styleCap);
 
-    // Monta o system prompt com o prefixo de estilo
-    const fullSystemPrompt = buildSystemPrompt(agent.system_prompt || '', commStyle);
+    // Monta o system prompt com o prefixo de estilo, guardrails e conhecimento
+    const fullSystemPrompt = buildSystemPrompt(
+      agent.system_prompt || '', 
+      commStyle,
+      knowledgeBase
+    );
 
     console.log(
       `[Webhook] Chamando IA (${provider}) | Modelo: ${model} | Temp: ${temperature} | Tokens: ${maxTokens} | Estilo: ${commStyle}`

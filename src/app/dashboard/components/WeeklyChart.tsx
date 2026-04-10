@@ -20,8 +20,24 @@ export default function WeeklyChart({ data }: WeeklyChartProps) {
           itemStyle={{ color: 'var(--text-primary)' }}
         />
         <Legend iconType="circle" wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
-        <Line type="monotone" dataKey="ai" name="Agente IA" stroke="var(--accent-secondary)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-        <Line type="monotone" dataKey="human" name="Entrada Manual" stroke="var(--accent-primary)" strokeWidth={3} dot={{ r: 4 }} />
+        <Line 
+          type="monotone" 
+          dataKey="ai" 
+          name="Agente IA" 
+          stroke="var(--accent-secondary)" 
+          strokeWidth={3} 
+          dot={{ r: 4, fill: 'var(--accent-secondary)', strokeWidth: 2, stroke: '#fff' }} 
+          activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }} 
+        />
+        <Line 
+          type="monotone" 
+          dataKey="human" 
+          name="Entrada Manual" 
+          stroke="#06b6d4" 
+          strokeWidth={3} 
+          dot={{ r: 4, fill: '#06b6d4', strokeWidth: 2, stroke: '#fff' }} 
+          activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
+        />
       </LineChart>
     </ResponsiveContainer>
   );

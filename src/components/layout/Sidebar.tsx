@@ -12,7 +12,10 @@ import {
   LogOut,
   MessageSquare,
   Smartphone,
-  KanbanSquare
+  KanbanSquare,
+  BookOpen,
+  GraduationCap,
+  CalendarDays
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -41,14 +44,26 @@ export default function Sidebar() {
   };
 
   const menuItems = [
-    { name: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Kanban', icon: KanbanSquare, path: '/dashboard/pipeline' },
-    { name: 'Leads (Em Massa)', icon: Users, path: '/dashboard/leads' },
-    { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat' },
-    { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents' },
-    { name: 'API WhatsApp', icon: Smartphone, path: '/dashboard/whatsapp' },
-    { name: 'Configurações', icon: Settings, path: '/dashboard/settings' },
+    { name: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard', group: 'crm' },
+    { name: 'Kanban', icon: KanbanSquare, path: '/dashboard/pipeline', group: 'crm' },
+    { name: 'Leads (Em Massa)', icon: Users, path: '/dashboard/leads', group: 'crm' },
+    { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat', group: 'crm' },
+    { name: 'Cursos', icon: BookOpen, path: '/dashboard/courses', group: 'academic' },
+    { name: 'Matrículas', icon: GraduationCap, path: '/dashboard/enrollments', group: 'academic' },
+    { name: 'Agendamentos', icon: CalendarDays, path: '/dashboard/visits', group: 'academic' },
+    { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents', group: 'automation' },
+    { name: 'WhatsApp', icon: Smartphone, path: '/dashboard/whatsapp', group: 'automation' },
+    { name: 'Configurações', icon: Settings, path: '/dashboard/settings', group: 'system' },
   ];
+
+  const groupLabels: Record<string, string> = {
+    crm: 'Gestão CRM',
+    academic: 'Acadêmico',
+    automation: 'Conexões & IA',
+    system: 'Sistema',
+  };
+
+  const groups = ['crm', 'academic', 'automation', 'system'];
 
   return (
     <aside className="sidebar">
@@ -64,25 +79,33 @@ export default function Sidebar() {
       </div>
 
       <nav className={styles.nav}>
-        {menuItems.map((item, index) => {
-          const isActive = pathname === item.path;
-          // No mobile, limitamos a 5 itens para não quebrar o layout Pill
-          const isHiddenOnMobile = index > 4; 
-          
+        {groups.map((group) => {
+          const groupItems = menuItems.filter(i => i.group === group);
           return (
-            <Link 
-              key={item.name} 
-              href={item.path}
-              className={`${styles.navItem} ${isActive ? styles.active : ''} ${isHiddenOnMobile ? styles.desktopOnly : ''}`}
-            >
-              <div className={styles.iconWrapper}>
-                <item.icon size={20} className={styles.icon} />
-                {item.name.includes('Chat') && (
-                  <div className={styles.notificationDot} />
-                )}
+            <div key={group}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '0.75rem 0.75rem 0.25rem', marginTop: group !== 'crm' ? '0.5rem' : 0 }}>
+                {groupLabels[group]}
               </div>
-              <span>{item.name.replace(' (Handoff)', '')}</span>
-            </Link>
+              {groupItems.map((item, index) => {
+                const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
+                const isHiddenOnMobile = index > 2;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.path}
+                    className={`${styles.navItem} ${isActive ? styles.active : ''} ${isHiddenOnMobile ? styles.desktopOnly : ''}`}
+                  >
+                    <div className={styles.iconWrapper}>
+                      <item.icon size={20} className={styles.icon} />
+                      {item.name.includes('Chat') && (
+                        <div className={styles.notificationDot} />
+                      )}
+                    </div>
+                    <span>{item.name.replace(' (Handoff)', '')}</span>
+                  </Link>
+                );
+              })}
+            </div>
           );
         })}
       </nav>

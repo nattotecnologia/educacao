@@ -1,25 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, ShieldCheck, Globe, BrainCircuit, Loader2, RefreshCw, Palette, Upload, Moon, Sun } from 'lucide-react';
+import { 
+  Globe, ShieldCheck, BrainCircuit, Loader2, Save, 
+  Palette, Upload, Moon, Sun, Smartphone, ExternalLink 
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNotification } from '@/contexts/NotificationContext';
 import styles from './Settings.module.css';
 import { createClient } from '@/utils/supabase/client';
 import { getInstitutionSettings, updateInstitutionSettings, getPlatformSettings, updatePlatformSettings } from './actions';
+import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
   const { addNotification } = useNotification();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<'geral' | 'whatsapp' | 'ai' | 'whitelabel'>('geral');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [fetchingModels, setFetchingModels] = useState(false);
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [syncingStatus, setSyncingStatus] = useState(false);
 
   const [institution, setInstitution] = useState<any>(null);
   const [platform, setPlatform] = useState<any>(null);
@@ -35,7 +37,6 @@ export default function SettingsPage() {
         if (instData) setInstitution(instData);
         if (platData) {
           setPlatform(platData);
-          // Apply color to root if previewing live
           document.documentElement.style.setProperty('--accent-primary', platData.primary_color || '#3b82f6');
         }
       } catch (err: any) {
@@ -66,7 +67,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'light' | 'dark') => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'light' | 'dark' | 'fav_light' | 'fav_dark') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -104,10 +105,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Funcao listar modelos omitida pra manter clareza (simula a original que estava aqui)
-  const loadModels = async (instData: any) => { /* logic */ };
-  const handleSyncStatus = async () => { /* logic */ };
-
   if (loading || !mounted) {
     return <div className={styles.loadingContainer}><Loader2 className="animate-spin" size={40} /></div>;
   }
@@ -122,7 +119,6 @@ export default function SettingsPage() {
 
   return (
     <form onSubmit={handleSave} className={styles.container}>
-      {/* Sidebar / Tabs */}
       <nav className={styles.sidebarNav}>
         <button type="button" onClick={() => setActiveTab('geral')} className={`${styles.navButton} ${activeTab === 'geral' ? styles.navButtonActive : ''}`}>
           <Globe size={18} /> Instituição
@@ -137,7 +133,6 @@ export default function SettingsPage() {
           <Palette size={18} /> Personalização
         </button>
         
-        {/* Toggle Theme globally accessible here too for convenience */}
         <button 
           type="button" 
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
@@ -148,7 +143,6 @@ export default function SettingsPage() {
         </button>
       </nav>
 
-      {/* Main Form Content */}
       <div className={styles.mainContent}>
         {activeTab === 'geral' && (
           <section className={styles.section}>
@@ -193,7 +187,6 @@ export default function SettingsPage() {
                   <span>{platform.primary_color || '#3b82f6'}</span>
                 </div>
                 
-                {/* Sugestões de Cores Rápidas */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                    {['#3b82f6', '#8b5cf6', '#10b981', '#f43f5e', '#f59e0b', '#000000'].map(preset => (
                      <button 
@@ -217,7 +210,7 @@ export default function SettingsPage() {
                     {platform.logo_light_url ? <img src={platform.logo_light_url} alt="Logo Light" className={styles.logoPreview} /> : <span style={{ color: 'var(--text-muted)' }}>Sem Imagem</span>}
                     <label className={styles.primaryBtn} style={{ fontSize: '0.75rem', padding: '0.5rem 1rem' }}>
                       <Upload size={14} /> Fazer Upload
-                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'light' as any)} disabled={saving} />
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'light')} disabled={saving} />
                     </label>
                   </div>
                 </div>
@@ -228,7 +221,7 @@ export default function SettingsPage() {
                     {platform.logo_dark_url ? <img src={platform.logo_dark_url} alt="Logo Dark" className={styles.logoPreview} /> : <span style={{ color: 'var(--bg-primary)' }}>Sem Imagem</span>}
                     <label className={styles.primaryBtn} style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.75rem', padding: '0.5rem 1rem' }}>
                       <Upload size={14} /> Fazer Upload
-                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'dark' as any)} disabled={saving} />
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'dark')} disabled={saving} />
                     </label>
                   </div>
                 </div>
@@ -239,7 +232,7 @@ export default function SettingsPage() {
                     {platform.favicon_light_url ? <img src={platform.favicon_light_url} alt="Favicon Light" className={styles.logoPreview} style={{maxWidth: '40px'}} /> : <span style={{ color: 'var(--text-muted)' }}>Favicon Vazio</span>}
                     <label className={styles.primaryBtn} style={{ fontSize: '0.75rem', padding: '0.5rem 1rem' }}>
                       <Upload size={14} /> Upload Favicon
-                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'fav_light' as any)} disabled={saving} />
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'fav_light')} disabled={saving} />
                     </label>
                   </div>
                 </div>
@@ -250,7 +243,7 @@ export default function SettingsPage() {
                     {platform.favicon_dark_url ? <img src={platform.favicon_dark_url} alt="Favicon Dark" className={styles.logoPreview} style={{maxWidth: '40px'}} /> : <span style={{ color: 'var(--bg-primary)' }}>Favicon Vazio</span>}
                     <label className={styles.primaryBtn} style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.75rem', padding: '0.5rem 1rem' }}>
                       <Upload size={14} /> Upload Favicon
-                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'fav_dark' as any)} disabled={saving} />
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleLogoUpload(e, 'fav_dark')} disabled={saving} />
                     </label>
                   </div>
                 </div>
@@ -260,99 +253,38 @@ export default function SettingsPage() {
         )}
 
         {activeTab === 'whatsapp' && (
-           <section className={styles.section}>
-              <header className={styles.sectionHeader}>
-                <h2>Conexão WhatsApp (Evolution API)</h2>
-                <p>Status atual: {institution.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado'}</p>
-              </header>
-              <div className={styles.formGrid}>
-                 <div className={styles.inputGroup}>
-                   <label className={styles.label}>Nome da Instância</label>
-                   <input 
-                     type="text" 
-                     placeholder="Ex: education"
-                     value={institution.evolution_instance_name || ''} 
-                     onChange={(e) => setInstitution({...institution, evolution_instance_name: e.target.value})}
-                     className={styles.input} 
-                   />
-                 </div>
-                 <div className={styles.inputGroup}>
-                   <label className={styles.label}>API Token / Key</label>
-                   <input 
-                     type="password" 
-                     placeholder="Token da Instância"
-                     value={institution.evolution_api_key || ''} 
-                     onChange={(e) => setInstitution({...institution, evolution_api_key: e.target.value})}
-                     className={styles.input} 
-                   />
-                 </div>
-              </div>
-           </section>
+          <section className={styles.section}>
+            <header className={styles.sectionHeader}>
+              <h2>Conexão WhatsApp</h2>
+              <p>As configurações técnicas de conexão e o pareamento de aparelhos foram movidos para o módulo dedicado.</p>
+            </header>
+            <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.1)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+              <Smartphone size={48} style={{ margin: '0 auto 1rem', color: 'var(--accent-primary)' }} />
+              <p style={{ marginBottom: '1.5rem' }}>Gerencie instâncias, tokens e QR Code diretamente na página de WhatsApp.</p>
+              <button type="button" onClick={() => router.push('/dashboard/whatsapp')} className="custom-button">
+                <ExternalLink size={18} /> Ir para Conexão WhatsApp
+              </button>
+            </div>
+          </section>
         )}
 
         {activeTab === 'ai' && (
-           <section className={styles.section}>
-              <header className={styles.sectionHeader}>
-                <h2>Cérebro da IA (Integração LLM)</h2>
-                <p>Configure a conexão com seu provedor principal.</p>
-              </header>
-              <div className={styles.formGrid}>
-                 <div className={styles.inputGroup}>
-                   <label className={styles.label}>Provedor AI</label>
-                   <select 
-                     value={institution.ai_provider || 'openai'}
-                     onChange={(e) => setInstitution({...institution, ai_provider: e.target.value})}
-                     className={styles.input}
-                     style={{ background: 'var(--bg-tertiary)', border: 'none', padding: '1rem', color: 'var(--text-primary)' }}
-                   >
-                     <option value="openai">OpenAI</option>
-                     <option value="groq">Groq</option>
-                     <option value="openrouter">OpenRouter</option>
-                     <option value="custom">Custom API</option>
-                   </select>
-                 </div>
-                 
-                 <div className={styles.inputGroup}>
-                   <label className={styles.label}>API Key ({institution.ai_provider?.toUpperCase()})</label>
-                   <input 
-                     type="password" 
-                     placeholder="Insira sua chave correspondente"
-                     value={
-                        institution.ai_provider === 'openai' ? institution.openai_key || '' :
-                        institution.ai_provider === 'groq' ? institution.groq_key || '' :
-                        institution.ai_provider === 'openrouter' ? institution.openrouter_key || '' :
-                        institution.ai_api_key || ''
-                     } 
-                     onChange={(e) => {
-                       const val = e.target.value;
-                       const keyNode = 
-                         institution.ai_provider === 'openai' ? 'openai_key' :
-                         institution.ai_provider === 'groq' ? 'groq_key' :
-                         institution.ai_provider === 'openrouter' ? 'openrouter_key' :
-                         'ai_api_key';
-                       setInstitution({...institution, [keyNode]: val});
-                     }}
-                     className={styles.input} 
-                   />
-                 </div>
-
-                 <div className={styles.inputGroup}>
-                   <label className={styles.label}>Modelo Específico</label>
-                   <input 
-                     type="text" 
-                     placeholder="Ex: gpt-4o ou mistral-8x7b"
-                     value={institution.ai_model || ''} 
-                     onChange={(e) => setInstitution({...institution, ai_model: e.target.value})}
-                     className={styles.input} 
-                   />
-                 </div>
-              </div>
-           </section>
+          <section className={styles.section}>
+            <header className={styles.sectionHeader}>
+              <h2>Inteligência Artificial</h2>
+              <p>As chaves de API globais e a configuração de provedores (OpenAI, Groq, etc.) agora são gerenciadas junto aos Agentes.</p>
+            </header>
+            <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.1)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+              <BrainCircuit size={48} style={{ margin: '0 auto 1rem', color: 'var(--accent-secondary)' }} />
+              <p style={{ marginBottom: '1.5rem' }}>Configure os modelos e credenciais globais diretamente no painel de agentes.</p>
+              <button type="button" onClick={() => router.push('/dashboard/agents')} className="custom-button">
+                <ExternalLink size={18} /> Ir para Agentes de IA
+              </button>
+            </div>
+          </section>
         )}
-
       </div>
       
-      {/* Sticky Bottom Actions */}
       <div className={styles.submitBar}>
         <button type="submit" className={styles.primaryBtn} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} /> Gravar Modificações</>}
