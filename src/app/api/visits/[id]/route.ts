@@ -24,8 +24,9 @@ async function getInstitutionId(request: NextRequest) {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const institutionId = await getInstitutionId(request);
   if (!institutionId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -34,7 +35,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from('visit_appointments')
     .update(body)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('institution_id', institutionId)
     .select()
     .single();
@@ -45,15 +46,16 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const institutionId = await getInstitutionId(request);
   if (!institutionId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { error } = await supabase
     .from('visit_appointments')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('institution_id', institutionId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

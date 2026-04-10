@@ -24,8 +24,9 @@ async function getInstitutionId(request: NextRequest) {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const institutionId = await getInstitutionId(request);
   if (!institutionId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -37,7 +38,7 @@ export async function PATCH(
     const { data: enrollment } = await supabase
       .from('enrollments')
       .select('class_id, status')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('institution_id', institutionId)
       .single();
 
@@ -60,7 +61,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from('enrollments')
     .update(body)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('institution_id', institutionId)
     .select()
     .single();
