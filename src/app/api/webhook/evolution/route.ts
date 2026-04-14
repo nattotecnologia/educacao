@@ -245,7 +245,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita em formato ISO 8601 (ex: 2025-04-15T14:00:00). Exemplo: o lead pediu amanhã às 14h, use a Data e Hora Atuais para calcular esse dia e formatar.',
+            description: 'Data e hora da visita OBRIGATORIAMENTE em formato ISO 8601 completo (exemplo abstrato: YYYY-MM-DDTHH:mm:ss). Atenção ao Ano: cruze sempre a "Data e Hora Atuais" do Contexto para deduzir em qual ano estamos!',
           },
           notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
         },
