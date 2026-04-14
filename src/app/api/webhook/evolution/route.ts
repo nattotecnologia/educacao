@@ -137,13 +137,16 @@ function buildSystemPrompt(
     ? `## IDENTIDADE E MISSÃO DO AGENTE\n${sanitizedUserPrompt.trim()}`
     : '## IDENTIDADE E MISSÃO DO AGENTE\nVocê é um assistente virtual educacional prestativo e amigável.';
 
+  const currentDateTime = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
   const contextInfo = [
     '## CONTEXTO DO ATENDIMENTO',
+    `- Data e Hora Atuais (Horário de Brasília): ${currentDateTime}`,
     `- Instituição: ${institutionName}`,
     `- Nome do Lead: ${leadName}`,
     `- Telefone: ${leadPhone}`,
     '',
-    `-> ATENÇÃO MÁXIMA: Se o nome do lead não for "Lead WhatsApp", significa que você JÁ SABE o nome da pessoa. É ESTRITAMENTE PROIBIDO perguntar o nome dela novamente. Chame-a pelo nome na saudação! E sempre se apresente de forma amigável falando por qual instituição você atende (${institutionName}).`
+    `-> ATENÇÃO MÁXIMA: Se o nome do lead não for "Lead WhatsApp", significa que você JÁ SABE o nome da pessoa. É ESTRITAMENTE PROIBIDO perguntar o nome dela novamente. Aja naturalmente respondendo de forma direta. OBRIGATÓRIO: NÃO REPITA SAUDAÇÕES. O usuário não quer ler "Olá, seja bem-vindo" em todas as mensagens que você mandar.`
   ].join('\n');
 
   // Capacidades que a IA pode acionar
@@ -159,7 +162,7 @@ function buildSystemPrompt(
     '- Se o lead perguntar sobre um curso, PRIMEIRO explique os benefícios e detalhes usando a BASE DE CONHECIMENTO.',
     '',
     '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
-    '- NUNCA use numeração ("1.", "2.") para fazer perguntas. Faça as perguntas em linha, de forma natural.',
+    '- É ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faça as perguntas de forma natural.',
     '- Peça apenas UM dado por vez (ex: esperar a pessoa responder a data, para depois pedir a hora).',
     '- Nunca peça o nome ou o telefone. Eles já estão explícitos no Contexto do Atendimento acima.',
     '',
@@ -167,7 +170,7 @@ function buildSystemPrompt(
     '- É uma tarefa rápida. NÃO complique.',
     '- NUNCA pergunte sobre "idade/nome da criança" ou "qual curso" se o lead só tiver dito que quer agendar uma visita.',
     '- Se você já tem o nome do lead, pergunte APENAS a data e o horário de preferência para a visita (se ele ainda não informou).',
-    '- Registre utilizando a função `register_visit`.',
+    '- Registre utilizando a função `register_visit`. OBRIGATÓRIO: Use a "Data e Hora Atuais" do contexto acima para calcular a data e formatar no padrão ISO 8601 exigido pela função.',
     '',
     '⚠️ REGRA DE OURO 4: MATRÍCULA',
     '- Exige mais dados: nome completo do aluno, e-mail e a turma exata.',
@@ -240,7 +243,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita em formato ISO 8601 (ex: 2025-04-15T14:00:00)',
+            description: 'Data e hora da visita. OBRIGATÓRIO estar no formato ISO 8601 (ex: 2025-04-15T14:00:00). Sempre deduzida consultando a "Data e Hora Atuais" do Contexto.',
           },
           notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
         },
