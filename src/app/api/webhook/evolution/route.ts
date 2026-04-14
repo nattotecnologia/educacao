@@ -170,7 +170,8 @@ function buildSystemPrompt(
     '- É uma tarefa rápida. NÃO complique.',
     '- NUNCA pergunte sobre "idade/nome da criança" ou "qual curso" se o lead só tiver dito que quer agendar uma visita.',
     '- Se você já tem o nome do lead, pergunte APENAS a data e o horário de preferência para a visita (se ele ainda não informou).',
-    '- Registre utilizando a função `register_visit`. OBRIGATÓRIO: Use a "Data e Hora Atuais" do contexto acima para calcular a data e formatar no padrão ISO 8601 exigido pela função.',
+    '- Para que o agendamento seja real, VOCÊ DEVE OBRIGATORIAMENTE CHAMAR A FERRAMENTA (TOOL) `register_visit`. É ESTRITAMENTE PROIBIDO confirmar o agendamento em texto se antes você não tiver executado essa ferramenta. Se não acionar a ferramenta, o banco não é atualizado.',
+    '- Use a "Data e Hora Atuais" do contexto acima para calcular a data e enviar no formato ISO 8601 exigido pela ferramenta.',
     '',
     '⚠️ REGRA DE OURO 4: MATRÍCULA',
     '- Exige mais dados: nome completo do aluno, e-mail e a turma exata.',
@@ -243,7 +244,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita. OBRIGATÓRIO estar no formato ISO 8601 (ex: 2025-04-15T14:00:00). Sempre deduzida consultando a "Data e Hora Atuais" do Contexto.',
+            description: 'Data e hora da visita em formato ISO 8601 (ex: 2025-04-15T14:00:00). Exemplo: o lead pediu amanhã às 14h, use a Data e Hora Atuais para calcular esse dia e formatar.',
           },
           notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
         },
@@ -675,14 +676,32 @@ export async function POST(request: NextRequest) {
         toolCallId = toolCall.id;
         hasToolCall = true;
       }
-      // 2) Fallback: Verifica se o modelo retornou raw text `<tool_call>` vazado (ocorre com OpenRouter/alguns modelos Llama)
-      else if (choice.message?.content && choice.message.content.includes('<tool_call>')) {
+      // 2) Fallback agressivo: Verifica se o modelo retornou raw text `<tool_call>` vazado ou JSON da tool.
+      else if (choice.message?.content) {
+        let parsed = null;
+        const rawContent = choice.message.content;
+        
         try {
-          const rawContent = choice.message.content;
+          // Checa o padrão <tool_call> explícito
           const blockMatch = rawContent.match(/<tool_call>[\s\S]*?({[\s\S]+.*})/i);
-          
           if (blockMatch && blockMatch[1]) {
-            const parsed = JSON.parse(blockMatch[1]);
+            parsed = JSON.parse(blockMatch[1]);
+          } else {
+            // Tenta detectar `{ "name": "register_visit" ... }` no meio do texto bruto
+            if (rawContent.includes('"register_visit"') || rawContent.includes('"register_enrollment"')) {
+              const jsonMatch = rawContent.match(/```json\n?([\s\S]*?)```/);
+              if (jsonMatch && jsonMatch[1]) {
+                 parsed = JSON.parse(jsonMatch[1]);
+              } else {
+                 const possibleJsonMatch = rawContent.match(/({[\s\S]*?"name"\s*:\s*"(?:register_visit|register_enrollment)"[\s\S]*})/i);
+                 if (possibleJsonMatch && possibleJsonMatch[1]) {
+                    parsed = JSON.parse(possibleJsonMatch[1]);
+                 }
+              }
+            }
+          }
+
+          if (parsed && parsed.name && parsed.arguments) {
             if (parsed.name && parsed.arguments) {
               toolName = parsed.name;
               toolArgs = parsed.arguments;
