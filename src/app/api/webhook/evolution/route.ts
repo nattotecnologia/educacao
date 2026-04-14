@@ -175,7 +175,7 @@ function buildSystemPrompt(
     '- É OBRIGATÓRIO salvar o agendamento no banco de dados. Jamais minta que "A visita foi agendada" sem engatilhar a ferramenta.',
     '- SE VOCÊ OU O SEU PROVEDOR NÃO TIVEREM SUPORTE A FUNCTION CALLING NATIVO, você DEVE retornar EXCLUSIVAMENTE o bloco de código JSON abaixo, sem mais nenhuma palavra:',
     '```json',
-    '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:ss" } }',
+    '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:ss-03:00" } }',
     '```',
     '- Use a "Data e Hora Atuais" do contexto para calcular corretamente o ano, mês e dia desejado no ISO 8601.',
     '',
@@ -249,7 +249,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita OBRIGATORIAMENTE em formato ISO 8601 completo (exemplo abstrato: YYYY-MM-DDTHH:mm:ss). Atenção ao Ano: cruze sempre a "Data e Hora Atuais" do Contexto para deduzir em qual ano estamos!',
+            description: 'Data e hora da visita OBRIGATORIAMENTE em formato ISO 8601 com o sufixo de fuso brasileiro (exemplo abstrato: YYYY-MM-DDTHH:mm:ss-03:00). Nunca esqueça do sufixo -03:00. Atenção ao Ano: cruze a "Data e Hora Atuais" do Contexto para deduzir o ano!',
           },
           notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
         },
