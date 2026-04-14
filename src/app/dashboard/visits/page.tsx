@@ -44,6 +44,23 @@ export default function VisitsPage() {
   
   const [view, setView] = useState<'day' | 'week' | 'month'>('week');
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+    type: 'danger' | 'primary';
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    action: () => {},
+    type: 'primary'
+  });
   
   const [form, setForm] = useState({
     lead_name: '', lead_phone: '', scheduled_at: '', notes: '', lead_id: '',
@@ -59,24 +76,30 @@ export default function VisitsPage() {
 
   const setFormField = (key: string, val: any) => setForm(prev => ({ ...prev, [key]: val }));
 
-  const handleLeadSearch = (val: string) => {
+  const handleLeadSearch = async (val: string) => {
     setLeadSearch(val);
-    if (val.length > 2) {
-      const filtered = leads.filter(l => 
+    setFormField('lead_name', val);
+    setFormField('lead_id', ''); // Limpa ID se o usuário estiver digitando manualmente
+    
+    if (val.length < 2) {
+      setLeadSuggestions([]);
+      return;
+    }
+    const filtered = leads.filter(l => 
         l.name?.toLowerCase().includes(val.toLowerCase()) || 
         l.phone?.includes(val)
       );
       setLeadSuggestions(filtered);
-    } else {
-      setLeadSuggestions([]);
-    }
   };
 
   const selectLead = (lead: any) => {
-    setFormField('lead_id', lead.id);
-    setFormField('lead_name', lead.name || '');
-    setFormField('lead_phone', maskPhone(lead.phone || ''));
-    setLeadSearch(lead.name || '');
+    setForm(prev => ({ 
+      ...prev, 
+      lead_id: lead.id, 
+      lead_name: lead.name, 
+      lead_phone: maskPhone(lead.phone || '') 
+    }));
+    setLeadSearch(lead.name);
     setLeadSuggestions([]);
   };
 
@@ -137,6 +160,70 @@ export default function VisitsPage() {
     }
   }, [statusFilter]);
 
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVisit) return;
+    
+    const fullDateTime = new Date(`${editForm.scheduled_date}T${editForm.scheduled_time}`);
+    const now = new Date();
+
+    if (fullDateTime < now && fullDateTime.getTime() !== new Date(selectedVisit.scheduled_at).getTime()) {
+      setError('Não é possível reagendar para o passado.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/visits/${selectedVisit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          lead_phone: editForm.lead_phone,
+          scheduled_at: fullDateTime.toISOString(),
+          notes: editForm.notes,
+          status: editForm.status
+        }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao atualizar');
+      
+      setIsEditing(false);
+      setSelectedVisit(null);
+      setConfirmModal(prev => ({ ...prev, show: false }));
+      fetchVisits();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedVisit) return;
+
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/visits/${selectedVisit.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+
+      if (!res.ok) throw new Error('Falha ao excluir');
+      
+      setSelectedVisit(null);
+      setConfirmModal(prev => ({ ...prev, show: false }));
+      fetchVisits();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchVisits();
     (async () => {
@@ -160,7 +247,19 @@ export default function VisitsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.lead_name || !form.scheduled_at) { setError('Nome e data são obrigatórios.'); return; }
+    if (!form.lead_name || !scheduledDate || !scheduledTime) { 
+      setError('Nome, data e horário são obrigatórios.'); 
+      return; 
+    }
+
+    const fullDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+    const now = new Date();
+
+    if (fullDateTime < now) {
+      setError('Não é possível agendar visitas em datas ou horários passados.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -169,12 +268,18 @@ export default function VisitsPage() {
       const res = await fetch('/api/visits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ ...form, lead_id: form.lead_id || null }),
+        body: JSON.stringify({ 
+          ...form, 
+          scheduled_at: fullDateTime.toISOString(),
+          lead_id: form.lead_id || null 
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setShowNewForm(false);
       setForm({ lead_name: '', lead_phone: '', scheduled_at: '', notes: '', lead_id: '' });
+      setScheduledDate('');
+      setScheduledTime('');
       setLeadSearch('');
       setLeadSuggestions([]);
       fetchVisits();
@@ -378,7 +483,7 @@ export default function VisitsPage() {
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: '#fff' }}>Agendar Nova Visita</h3>
                 <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                   <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Buscar Lead Existente</label>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nome do Lead (Buscar ou Criar) *</label>
                     <div style={{ position: 'relative' }}>
                       <input 
                         id="visit-lead-search" 
@@ -386,6 +491,7 @@ export default function VisitsPage() {
                         onChange={e => handleLeadSearch(e.target.value)}
                         placeholder="Pesquisar por nome ou telefone..." 
                         style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                        required
                       />
                       {leadSuggestions.length > 0 && (
                         <div style={{ 
@@ -425,34 +531,60 @@ export default function VisitsPage() {
                       )}
                     </div>
                   </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', gridColumn: '1 / -1' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
+                      <input 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                        value={form.lead_phone} 
+                        onChange={e => setFormField('lead_phone', maskPhone(e.target.value))} 
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data *</label>
+                      <input 
+                        type="date" 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }} 
+                        value={scheduledDate} 
+                        onChange={e => setScheduledDate(e.target.value)} 
+                        min={new Date().toISOString().split('T')[0]}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', gridColumn: '1 / -1' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Horário *</label>
+                      <select 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                        value={scheduledTime} 
+                        onChange={e => setScheduledTime(e.target.value)} 
+                        required
+                      >
+                        <option value="">Selecione...</option>
+                        {Array.from({ length: 25 }, (_, i) => {
+                          const h = Math.floor(i / 2) + 8;
+                          const m = i % 2 === 0 ? '00' : '30';
+                          const time = `${String(h).padStart(2, '0')}:${m}`;
+                          return <option key={time} value={time}>{time}</option>;
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nome Completo *</label>
-                    <input 
-                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
-                      value={form.lead_name} 
-                      onChange={e => setFormField('lead_name', e.target.value)} 
-                      required
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
+                    <textarea 
+                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', minHeight: '80px', resize: 'vertical' }} 
+                      value={form.notes} 
+                      onChange={e => setFormField('notes', e.target.value)}
+                      placeholder="Alguma observação importante para a visita?"
                     />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
-                    <input 
-                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
-                      value={form.lead_phone} 
-                      onChange={e => setFormField('lead_phone', maskPhone(e.target.value))} 
-                      placeholder="(00) 00000-0000"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data e Hora *</label>
-                    <input 
-                      type="datetime-local" 
-                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }} 
-                      value={form.scheduled_at} 
-                      onChange={e => setFormField('scheduled_at', e.target.value)} 
-                      required
-                    />
-                  </div>
+
                   <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
                     <button 
                       type="button" 
@@ -471,52 +603,225 @@ export default function VisitsPage() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                   <div>
-                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>{selectedVisit.lead_name}</h3>
-                    <div style={{ display: 'flex', gap: '0.75rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={14} /> {new Date(selectedVisit.scheduled_at).toLocaleString('pt-BR')}</span>
-                    </div>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>
+                      {selectedVisit.lead_name}
+                    </h3>
+                    {!isEditing && (
+                      <div style={{ display: 'flex', gap: '0.75rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Clock size={14} /> {new Date(selectedVisit.scheduled_at).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <button onClick={() => setSelectedVisit(null)} style={{ color: 'var(--text-muted)' }}><XCircle size={24} /></button>
+                  <button onClick={() => { setSelectedVisit(null); setIsEditing(false); }} style={{ color: 'var(--text-muted)' }}>
+                    <XCircle size={24} />
+                  </button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
-                     <div style={{ color: '#fff', fontWeight: 600 }}>{maskPhone(selectedVisit.leads?.phone || selectedVisit.lead_phone || '') || 'Não informado'}</div>
-                   </div>
-                   
-                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Status</label>
-                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: STATUS_MAP[selectedVisit.status]?.color, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', padding: '0.25rem 0.75rem', background: `${STATUS_MAP[selectedVisit.status]?.color}11`, borderRadius: '20px', border: `1px solid ${STATUS_MAP[selectedVisit.status]?.color}33` }}>
-                        {STATUS_MAP[selectedVisit.status]?.label}
-                     </div>
-                   </div>
+                {isEditing ? (
+                  <form 
+                    id="edit-visit-form"
+                    onSubmit={handleUpdate} 
+                    style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}
+                  >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data</label>
+                        <input 
+                          type="date"
+                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }}
+                          value={editForm.scheduled_date}
+                          onChange={e => setEditForm({ ...editForm, scheduled_date: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Horário</label>
+                        <select 
+                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                          value={editForm.scheduled_time}
+                          onChange={e => setEditForm({ ...editForm, scheduled_time: e.target.value })}
+                        >
+                          {Array.from({ length: 25 }, (_, i) => {
+                            const h = Math.floor(i / 2) + 8;
+                            const m = i % 2 === 0 ? '00' : '30';
+                            const time = `${String(h).padStart(2, '0')}:${m}`;
+                            return <option key={time} value={time}>{time}</option>;
+                          })}
+                        </select>
+                      </div>
+                    </div>
 
-                   {selectedVisit.notes && (
-                     <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
-                       <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: '1.5' }}>{selectedVisit.notes}</div>
-                     </div>
-                   )}
-                </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
+                      <input 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                        value={editForm.lead_phone}
+                        onChange={e => setEditForm({ ...editForm, lead_phone: maskPhone(e.target.value) })}
+                      />
+                    </div>
 
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
-                   <button 
-                    className="agendar-btn" 
-                    style={{ flex: 1, justifyContent: 'center' }} 
-                    onClick={() => { /* TODO: Edit logic */ }}
-                   >
-                     Editar Visita
-                   </button>
-                   <button 
-                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
-                    onClick={() => { /* TODO: Delete logic */ }}
-                   >
-                     Excluir
-                   </button>
-                </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
+                      <textarea 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', minHeight: '80px' }}
+                        value={editForm.notes}
+                        onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsEditing(false)} 
+                        style={{ flex: 1, color: 'var(--text-secondary)' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="button" 
+                        className="agendar-btn" 
+                        disabled={saving} 
+                        style={{ flex: 2, justifyContent: 'center' }}
+                        onClick={() => {
+                          setConfirmModal({
+                            show: true,
+                            title: 'Confirmar Alteração',
+                            message: 'Deseja salvar as alterações feitas neste agendamento?',
+                            type: 'primary',
+                            action: () => {
+                              // Chamar handleUpdate manualmente passando um evento de submit simulado ou refatorar
+                              const formElement = document.getElementById('edit-visit-form') as HTMLFormElement;
+                              if (formElement) formElement.requestSubmit();
+                            }
+                          });
+                        }}
+                      >
+                        {saving ? <Loader2 className="animate-spin" size={18} /> : 'Salvar Alterações'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                       <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
+                         <div style={{ color: '#fff', fontWeight: 600 }}>{maskPhone(selectedVisit.leads?.phone || selectedVisit.lead_phone || '') || 'Não informado'}</div>
+                       </div>
+                       
+                       <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Status</label>
+                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: STATUS_MAP[selectedVisit.status]?.color, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', padding: '0.25rem 0.75rem', background: `${STATUS_MAP[selectedVisit.status]?.color}11`, borderRadius: '20px', border: `1px solid ${STATUS_MAP[selectedVisit.status]?.color}33` }}>
+                            {STATUS_MAP[selectedVisit.status]?.label}
+                         </div>
+                       </div>
+    
+                       {selectedVisit.notes && (
+                         <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                           <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
+                           <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: '1.5' }}>{selectedVisit.notes}</div>
+                         </div>
+                       )}
+                    </div>
+    
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+                       <button 
+                        className="agendar-btn" 
+                        style={{ flex: 1, justifyContent: 'center' }} 
+                        onClick={() => {
+                          const dt = new Date(selectedVisit.scheduled_at);
+                          setEditForm({
+                            scheduled_date: dt.toISOString().split('T')[0],
+                            scheduled_time: `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`,
+                            lead_phone: selectedVisit.lead_phone,
+                            notes: selectedVisit.notes || '',
+                            status: selectedVisit.status
+                          });
+                          setIsEditing(true);
+                        }}
+                       >
+                         Editar Visita
+                       </button>
+                       <button 
+                        style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
+                        onClick={() => {
+                          setConfirmModal({
+                            show: true,
+                            title: 'Excluir Agendamento',
+                            message: 'Tem certeza que deseja remover esta visita? Esta ação não pode ser desfeita.',
+                            type: 'danger',
+                            action: handleDelete
+                          });
+                        }}
+                       >
+                         Excluir
+                       </button>
+                    </div>
+                  </>
+                )}
               </>
             ) : null}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {mounted && confirmModal.show && createPortal(
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          backgroundColor: 'rgba(0,0,0,0.8)', 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          zIndex: 999999,
+          backdropFilter: 'blur(12px)'
+        }} onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}>
+          <div 
+            className="glass-panel animate-in" 
+            style={{ padding: '2rem', maxWidth: '400px', width: '90%', textAlign: 'center' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ 
+              width: '60px', 
+              height: '60px', 
+              borderRadius: '50%', 
+              background: confirmModal.type === 'danger' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              margin: '0 auto 1.5rem',
+              color: confirmModal.type === 'danger' ? '#ef4444' : '#3b82f6',
+              border: `1px solid ${confirmModal.type === 'danger' ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)'}`
+            }}>
+              {confirmModal.type === 'danger' ? <XCircle size={32} /> : <CheckCircle size={32} />}
+            </div>
+            
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', marginBottom: '0.75rem' }}>{confirmModal.title}</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '2rem' }}>{confirmModal.message}</p>
+            
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', fontWeight: 600 }}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmModal.action}
+                style={{ 
+                  flex: 1, 
+                  padding: '0.75rem', 
+                  borderRadius: '8px', 
+                  background: confirmModal.type === 'danger' ? '#ef4444' : 'var(--accent-primary)', 
+                  color: '#fff', 
+                  fontWeight: 600,
+                  boxShadow: confirmModal.type === 'danger' ? '0 4px 15px rgba(239, 68, 68, 0.3)' : 'var(--accent-shadow)' 
+                }}
+              >
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>,
         document.body

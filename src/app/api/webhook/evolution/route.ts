@@ -93,7 +93,7 @@ async function fetchKnowledgeBase(
     const price = c.price ? `R$ ${Number(c.price).toFixed(2)}` : 'Sob consulta';
     const duration = c.duration_hours ? `${c.duration_hours}h` : null;
     const extras = [c.modality, duration].filter(Boolean).join(', ');
-    lines.push(`📚 **${c.name}** — ${c.description || 'Sem descrição'}. Preço: ${price}. (${extras})`);
+    lines.push(`📚 *${c.name}* — ${c.description || 'Sem descrição'}. Preço: ${price}. (${extras})`);
 
     // Turmas deste curso
     const courseClasses = classes.filter((cl) => cl.course_id === c.id);
@@ -120,31 +120,58 @@ async function fetchKnowledgeBase(
 function buildSystemPrompt(
   userSystemPrompt: string,
   style: string,
-  knowledgeBase: string
+  knowledgeBase: string,
+  leadName: string,
+  leadPhone: string,
+  institutionName: string
 ): string {
+  // Limpa placeholders comuns no prompt do usuário para evitar que a IA fale "[NOME DA INSTITUIÇÃO]"
+  const sanitizedUserPrompt = (userSystemPrompt || '')
+    .replace(/\[NOME DA INSTITUIÇÃO\]/gi, institutionName)
+    .replace(/\[NOME_DA_INSTITUICAO\]/gi, institutionName)
+    .replace(/{institution}/gi, institutionName)
+    .replace(/{instituicao}/gi, institutionName);
+
   // O prompt do agente vem primeiro para que a persona seja respeitada
-  const agentPersona = userSystemPrompt?.trim()
-    ? `## IDENTIDADE E MISSÃO DO AGENTE\n${userSystemPrompt.trim()}`
+  const agentPersona = sanitizedUserPrompt?.trim()
+    ? `## IDENTIDADE E MISSÃO DO AGENTE\n${sanitizedUserPrompt.trim()}`
     : '## IDENTIDADE E MISSÃO DO AGENTE\nVocê é um assistente virtual educacional prestativo e amigável.';
+
+  const contextInfo = [
+    '## CONTEXTO DO ATENDIMENTO',
+    `- Instituição: ${institutionName}`,
+    `- Nome do Lead: ${leadName}`,
+    `- Telefone: ${leadPhone}`,
+    '',
+    `-> ATENÇÃO MÁXIMA: Se o nome do lead não for "Lead WhatsApp", significa que você JÁ SABE o nome da pessoa. É ESTRITAMENTE PROIBIDO perguntar o nome dela novamente. Chame-a pelo nome na saudação! E sempre se apresente de forma amigável falando por qual instituição você atende (${institutionName}).`
+  ].join('\n');
 
   // Capacidades que a IA pode acionar
   const capabilities = [
     '## SUAS CAPACIDADES E REGRAS DE OURO',
-    'Você pode ajudar o lead a realizar Matrículas e Agendamentos de Visita.',
+    'Você pode ajudar o lead a realizar Matrículas e Agendamentos de Visitas.',
+    '',
+    '⚠️ REGRA DE FORMATACÃO (WHATSAPP)',
+    '- No WhatsApp, o negrito é feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
     '',
     '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
     '- Antes de pedir qualquer dado, VALORIZE o interesse do lead.',
-    '- Se o lead perguntar sobre um curso ou matrícula, PRIMEIRO explique os benefícios e detalhes desse curso usando a BASE DE CONHECIMENTO abaixo.',
-    '- Ofereça ajuda para se matricular ou agendar uma visita APÓS fornecer as informações solicitadas.',
+    '- Se o lead perguntar sobre um curso, PRIMEIRO explique os benefícios e detalhes usando a BASE DE CONHECIMENTO.',
     '',
-    '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL (UM POR VEZ)',
-    '- NUNCA apresente uma lista numerada de perguntas para o lead.',
-    '- Peça apenas UM dado por vez (ex: primeiro o nome, espere a resposta, depois o e-mail).',
-    '- Se o lead já forneceu algum dado na frase anterior, não peça novamente.',
+    '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
+    '- NUNCA use numeração ("1.", "2.") para fazer perguntas. Faça as perguntas em linha, de forma natural.',
+    '- Peça apenas UM dado por vez (ex: esperar a pessoa responder a data, para depois pedir a hora).',
+    '- Nunca peça o nome ou o telefone. Eles já estão explícitos no Contexto do Atendimento acima.',
     '',
-    '⚠️ REGRA DE OURO 3: FUNÇÕES TÉCNICAS',
-    '1. **MATRÍCULA**: Colete: nome completo, e-mail e a turma desejada. Utilize a função `register_enrollment`.',
-    '2. **VISITA**: Colete: nome e data/hora preferida. Utilize a função `register_visit`.',
+    '⚠️ REGRA DE OURO 3: AGENDAMENTO DE VISITA',
+    '- É uma tarefa rápida. NÃO complique.',
+    '- NUNCA pergunte sobre "idade/nome da criança" ou "qual curso" se o lead só tiver dito que quer agendar uma visita.',
+    '- Se você já tem o nome do lead, pergunte APENAS a data e o horário de preferência para a visita (se ele ainda não informou).',
+    '- Registre utilizando a função `register_visit`.',
+    '',
+    '⚠️ REGRA DE OURO 4: MATRÍCULA',
+    '- Exige mais dados: nome completo do aluno, e-mail e a turma exata.',
+    '- Utilize a função `register_enrollment` após obter tudo.'
   ].join('\n');
 
   // Base de conhecimento dinâmica
@@ -163,6 +190,8 @@ function buildSystemPrompt(
 
   return [
     agentPersona,
+    '',
+    contextInfo,
     '',
     capabilities,
     '',
@@ -203,7 +232,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'register_visit',
       description:
-        'Agenda uma visita presencial à instituição. Use quando tiver o nome e a data/hora desejada.',
+        'Agenda uma visita à instituição. Use assim que tiver o nome e a data/hora desejada. Caso tenha a informação no contexto, não pergunte novamente.',
       parameters: {
         type: 'object',
         properties: {
@@ -512,9 +541,17 @@ export async function POST(request: NextRequest) {
     // 9. Greeting para novo lead
     if (isNewLead && agent.greeting_message) {
       console.log(`[Webhook] Enviando boas-vindas para ${phoneNumber}`);
+
+      const greetingFormatted = agent.greeting_message
+        .replace(/{nome}/gi, pushName)
+        .replace(/{lead_name}/gi, pushName)
+        .replace(/{institution}/gi, institution.name)
+        .replace(/{instituicao}/gi, institution.name)
+        .replace(/\[NOME DA INSTITUIÇÃO\]/gi, institution.name);
+
       await sendEvolutionMessage(
         evoUrl, evoKey, instanceName, phoneNumber,
-        agent.greeting_message,
+        greetingFormatted,
         agent.enable_line_breaks ?? false,
         agent.response_delay_ms ?? 800
       );
@@ -522,7 +559,7 @@ export async function POST(request: NextRequest) {
         lead_id: lead.id,
         institution_id: institution.id,
         direction: 'outbound_ai',
-        content: agent.greeting_message,
+        content: greetingFormatted,
       });
     }
 
@@ -576,13 +613,21 @@ export async function POST(request: NextRequest) {
 
     // 13. Monta system prompt (prioriza prompt do usuário)
     const commStyle: string = agent.communication_style || 'default';
-    const fullSystemPrompt = buildSystemPrompt(agent.system_prompt || '', commStyle, knowledgeText);
+    const fullSystemPrompt = buildSystemPrompt(
+      agent.system_prompt || '', 
+      commStyle, 
+      knowledgeText,
+      lead.name || 'Lead WhatsApp',
+      phoneNumber,
+      institution.name
+    );
 
     const model: string = agent.ai_model_override || institution.ai_model || 'gpt-4o';
     const temperature: number = agent.temperature ?? 0.7;
 
-    // Aumentando limite de tokens para evitar cortes no meio da resposta
-    const maxTokens = Math.min(agent.max_tokens ?? 800, 1000);
+    // Evita limite de tokens muito baixo que corta mensagens (Mínimo de 800)
+    const dbMaxTokens = Number(agent.max_tokens);
+    const maxTokens = (dbMaxTokens && dbMaxTokens > 100) ? Math.min(dbMaxTokens, 2000) : 800;
 
     console.log(`[Webhook] IA: ${provider}/${model} | Temp: ${temperature} | Tokens: ${maxTokens} | Estilo: ${commStyle}`);
     console.log(`[Webhook] System prompt (${fullSystemPrompt.length} chars) preview: "${fullSystemPrompt.substring(0, 150)}..."`);
@@ -609,14 +654,57 @@ export async function POST(request: NextRequest) {
 
       const choice = aiResponse.choices[0];
 
-      // Verifica se a IA quer executar uma função
+      let toolName = '';
+      let toolArgs: Record<string, string> = {};
+      let toolCallId = '';
+      let hasToolCall = false;
+
+      // 1) Verifica se a IA usou o formato nativo de tool_calls
       if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls?.length) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toolCall = choice.message.tool_calls[0] as any;
-        const toolName = toolCall.function.name as string;
-        const toolArgs = JSON.parse(toolCall.function.arguments || '{}') as Record<string, string>;
+        toolName = toolCall.function.name as string;
+        try {
+          toolArgs = JSON.parse(toolCall.function.arguments || '{}') as Record<string, string>;
+        } catch {
+          toolArgs = {};
+        }
+        toolCallId = toolCall.id;
+        hasToolCall = true;
+      }
+      // 2) Fallback: Verifica se o modelo retornou raw text `<tool_call>` vazado (ocorre com OpenRouter/alguns modelos Llama)
+      else if (choice.message?.content && choice.message.content.includes('<tool_call>')) {
+        try {
+          const rawContent = choice.message.content;
+          const blockMatch = rawContent.match(/<tool_call>[\s\S]*?({[\s\S]+.*})/i);
+          
+          if (blockMatch && blockMatch[1]) {
+            const parsed = JSON.parse(blockMatch[1]);
+            if (parsed.name && parsed.arguments) {
+              toolName = parsed.name;
+              toolArgs = parsed.arguments;
+              toolCallId = 'call_' + Date.now();
+              hasToolCall = true;
+              
+              // Mute the raw string so it doesn't get sent back if fallback happens
+              choice.message.content = null;
+              choice.message.tool_calls = [{
+                id: toolCallId,
+                type: 'function',
+                function: {
+                  name: toolName,
+                  arguments: JSON.stringify(toolArgs)
+                }
+              }];
+            }
+          }
+        } catch (e) {
+          console.error('[Webhook] Falha ao parsear <tool_call> manualmente do texto:', e);
+        }
+      }
 
-        console.log(`[Webhook] Tool call: ${toolName}`, toolArgs);
+      if (hasToolCall) {
+        console.log(`[Webhook] Tool call detectado: ${toolName}`, toolArgs);
 
         // Completa o número de telefone nos args antes de salvar
         if (!toolArgs.student_phone && toolName === 'register_enrollment') {
@@ -637,7 +725,7 @@ export async function POST(request: NextRequest) {
           classes
         );
 
-        // Pede à IA para formatar uma resposta humana com o resultado
+        // Pede à IA para formatar uma resposta humana com o resultado do Tool
         const confirmationResponse = await customOpenAI.chat.completions.create({
           model,
           messages: [
@@ -647,7 +735,7 @@ export async function POST(request: NextRequest) {
             {
               role: 'tool',
               content: toolResult,
-              tool_call_id: toolCall.id,
+              tool_call_id: toolCallId,
             },
           ],
           temperature,
@@ -656,12 +744,19 @@ export async function POST(request: NextRequest) {
 
         botMessage =
           confirmationResponse.choices[0]?.message?.content ||
-          toolResult; // usa o resultado diretamente como fallback
+          toolResult; // usa o resultado diretamente caso a confirmação falhe
+
+        // Limpa possíveis tags raw do fallback
+        botMessage = botMessage.replace(/<tool_call>[\s\S]*/g, '').trim() || toolResult;
       } else {
-        botMessage =
-          choice.message?.content ||
-          agent.fallback_message ||
-          'Desculpe, tive um problema ao processar sua mensagem.';
+        botMessage = choice.message?.content || '';
+        
+        // Se ainda houver alguma tag <tool_call> residual quebrada que não virou tool, removemos pro usuário não ver
+        botMessage = botMessage.replace(/<tool_call>[\s\S]*/g, '').trim();
+
+        if (!botMessage.trim()) {
+           botMessage = agent.fallback_message || 'Desculpe, tive um problema ao processar sua mensagem.';
+        }
       }
     } catch (aiError: unknown) {
       const errMsg = aiError instanceof Error ? aiError.message : String(aiError);

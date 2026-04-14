@@ -57,9 +57,46 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Nome do lead e data são obrigatórios.' }, { status: 400 });
   }
 
+  const appointmentDate = new Date(scheduled_at);
+  const now = new Date();
+
+  if (appointmentDate < now) {
+    return NextResponse.json({ error: 'Não é possível agendar visitas em datas ou horários passados.' }, { status: 400 });
+  }
+
+  const minutes = appointmentDate.getMinutes();
+  if (minutes !== 0 && minutes !== 30) {
+    return NextResponse.json({ error: 'O agendamento deve ser feito em intervalos de 30 minutos (ex: 14:00, 14:30).' }, { status: 400 });
+  }
+
+  let targetLeadId = lead_id;
+
+  if (!targetLeadId) {
+    const { data: newLead, error: leadError } = await supabase
+      .from('leads')
+      .insert({ 
+        institution_id: institutionId, 
+        name: lead_name, 
+        phone: lead_phone 
+      })
+      .select()
+      .single();
+    
+    if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
+    targetLeadId = newLead.id;
+  }
+
   const { data, error } = await supabase
     .from('visit_appointments')
-    .insert({ institution_id: institutionId, lead_id: lead_id || null, lead_name, lead_phone, scheduled_at, notes, assigned_to: assigned_to || null })
+    .insert({ 
+      institution_id: institutionId, 
+      lead_id: targetLeadId, 
+      lead_name, 
+      lead_phone, 
+      scheduled_at, 
+      notes, 
+      assigned_to: assigned_to || null 
+    })
     .select()
     .single();
 
