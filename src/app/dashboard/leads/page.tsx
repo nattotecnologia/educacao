@@ -11,6 +11,7 @@ import {
 import { leadService } from '@/services';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useNotification } from '@/contexts/NotificationContext';
+import { maskPhone } from '@/utils/masks';
 import styles from './Leads.module.css';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -247,7 +248,7 @@ export default function LeadsPage() {
                   <td>
                     <div className={styles.leadInfo}>
                       <span className={styles.leadName}>{lead.name || 'Sem Nome'}</span>
-                      <span className={styles.leadPhone}>{lead.phone}</span>
+                      <span className={styles.leadPhone}>{maskPhone(lead.phone)}</span>
                     </div>
                   </td>
                   <td>
@@ -339,7 +340,7 @@ export default function LeadsPage() {
             <div className={styles.modalBody}>
               <div className={styles.modalField}>
                 <Phone size={16} />
-                <span>{selectedLead.phone}</span>
+                <span>{maskPhone(selectedLead.phone)}</span>
               </div>
               {selectedLead.notes && (
                 <div className={styles.modalField}>
@@ -402,7 +403,7 @@ export default function LeadsPage() {
                     type="text" 
                     className="custom-input" 
                     value={editForm.phone} 
-                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })} 
+                    onChange={e => setEditForm({ ...editForm, phone: maskPhone(e.target.value) })} 
                     style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', color: 'white', outline: 'none' }}
                   />
                 </div>

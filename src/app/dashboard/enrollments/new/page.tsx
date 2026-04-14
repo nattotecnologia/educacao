@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, GraduationCap, Save, Search } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { maskPhone } from '@/utils/masks';
 
 interface ClassOption {
   id: string;
@@ -66,7 +67,7 @@ export default function NewEnrollmentPage() {
   const handleLeadSelect = (lead: Lead) => {
     set('lead_id', lead.id);
     set('student_name', lead.name || '');
-    set('student_phone', lead.phone || '');
+    set('student_phone', maskPhone(lead.phone || ''));
     setLeadSearch('');
   };
 
@@ -197,7 +198,7 @@ export default function NewEnrollmentPage() {
               </div>
               <div>
                 <label style={lbl}>Telefone</label>
-                <input id="student-phone" style={inp} value={form.student_phone} onChange={e => set('student_phone', e.target.value)} placeholder="(00) 00000-0000" />
+                <input id="student-phone" style={inp} value={form.student_phone} onChange={e => set('student_phone', maskPhone(e.target.value))} placeholder="(00) 00000-0000" />
               </div>
             </div>
             <div>

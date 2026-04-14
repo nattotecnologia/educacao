@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { pipelineService, leadService } from '@/services';
+import { maskPhone } from '@/utils/masks';
 import { Loader2, Plus, GripVertical, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import styles from './Pipeline.module.css';
 
@@ -249,7 +250,7 @@ export default function PipelinePage() {
                                 <div className={styles.cardAvatar}>
                                   <User size={14} />
                                 </div>
-                                <span className={styles.cardName}>{lead.name || lead.phone}</span>
+                                <span className={styles.cardName}>{lead.name || maskPhone(lead.phone)}</span>
                               </div>
                               <div className={styles.cardFooter}>
                                 <span className={styles.cardTime}>

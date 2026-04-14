@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, Plus, Loader2, CheckCircle, XCircle, AlertCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  CalendarDays, Plus, Loader2, CheckCircle, XCircle, 
+  AlertCircle, Clock, ChevronLeft, ChevronRight, Search, Filter 
+} from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { maskPhone } from '@/utils/masks';
+import './calendar.css';
 
 interface Visit {
   id: string;
@@ -16,28 +22,99 @@ interface Visit {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
-  scheduled: { label: 'Agendada', color: '#06b6d4', icon: Clock },
+  scheduled: { label: 'Agendada', color: 'var(--accent-primary)', icon: Clock },
   confirmed: { label: 'Confirmada', color: '#10b981', icon: CheckCircle },
   done: { label: 'Realizada', color: '#6366f1', icon: CheckCircle },
   cancelled: { label: 'Cancelada', color: '#ef4444', icon: XCircle },
   no_show: { label: 'Não compareceu', color: '#94a3b8', icon: AlertCircle },
 };
 
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 08:00 to 20:00
+
 export default function VisitsPage() {
   const router = useRouter();
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  
+  const [view, setView] = useState<'day' | 'week' | 'month'>('week');
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  
   const [form, setForm] = useState({
     lead_name: '', lead_phone: '', scheduled_at: '', notes: '', lead_id: '',
   });
   const [leads, setLeads] = useState<any[]>([]);
   const [leadSearch, setLeadSearch] = useState('');
+  const [leadSuggestions, setLeadSuggestions] = useState<any[]>([]);
+  const [mounted, setMounted] = useState(false);
 
-  const set = (key: string, val: any) => setForm(prev => ({ ...prev, [key]: val }));
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const setFormField = (key: string, val: any) => setForm(prev => ({ ...prev, [key]: val }));
+
+  const handleLeadSearch = (val: string) => {
+    setLeadSearch(val);
+    if (val.length > 2) {
+      const filtered = leads.filter(l => 
+        l.name?.toLowerCase().includes(val.toLowerCase()) || 
+        l.phone?.includes(val)
+      );
+      setLeadSuggestions(filtered);
+    } else {
+      setLeadSuggestions([]);
+    }
+  };
+
+  const selectLead = (lead: any) => {
+    setFormField('lead_id', lead.id);
+    setFormField('lead_name', lead.name || '');
+    setFormField('lead_phone', maskPhone(lead.phone || ''));
+    setLeadSearch(lead.name || '');
+    setLeadSuggestions([]);
+  };
+
+  // Date Helpers
+  const displayDays = useMemo(() => {
+    if (view === 'day') return [currentDate];
+    
+    if (view === 'week') {
+      const startOfWeek = new Date(currentDate);
+      const day = startOfWeek.getDay();
+      const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+      startOfWeek.setDate(diff);
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return d;
+      });
+    }
+
+    if (view === 'month') {
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const startDay = startOfMonth.getDay();
+      const diff = startDay === 0 ? -6 : 1 - startDay; // Mon start
+      const firstCalendarDay = new Date(startOfMonth);
+      firstCalendarDay.setDate(diff + startOfMonth.getDate());
+      
+      return Array.from({ length: 42 }, (_, i) => {
+        const d = new Date(firstCalendarDay);
+        d.setDate(firstCalendarDay.getDate() + i);
+        return d;
+      });
+    }
+
+    return [];
+  }, [currentDate, view]);
+
+  const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long' }).replace(/^\w/, (c) => c.toUpperCase());
+  const yearName = currentDate.getFullYear();
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -46,6 +123,7 @@ export default function VisitsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
+      
       const res = await fetch(`/api/visits?${params}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -61,25 +139,23 @@ export default function VisitsPage() {
 
   useEffect(() => {
     fetchVisits();
-    // Carrega leads para o formulário
     (async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user!.id).single();
-      const { data } = await supabase.from('leads').select('id, name, phone').eq('institution_id', profile!.institution_id).order('name');
+      if (!user) return;
+      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+      if (!profile) return;
+      const { data } = await supabase.from('leads').select('id, name, phone').eq('institution_id', profile.institution_id).order('name');
       setLeads(data || []);
     })();
   }, [fetchVisits]);
 
-  const updateStatus = async (id: string, status: string) => {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch(`/api/visits/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ status }),
-    });
-    fetchVisits();
+  const navigateDate = (amount: number) => {
+    const next = new Date(currentDate);
+    if (view === 'day') next.setDate(currentDate.getDate() + amount);
+    else if (view === 'week') next.setDate(currentDate.getDate() + (amount * 7));
+    else if (view === 'month') next.setMonth(currentDate.getMonth() + amount);
+    setCurrentDate(next);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -99,6 +175,8 @@ export default function VisitsPage() {
       if (!res.ok) throw new Error(data.error);
       setShowNewForm(false);
       setForm({ lead_name: '', lead_phone: '', scheduled_at: '', notes: '', lead_id: '' });
+      setLeadSearch('');
+      setLeadSuggestions([]);
       fetchVisits();
     } catch (err: any) {
       setError(err.message);
@@ -107,151 +185,341 @@ export default function VisitsPage() {
     }
   };
 
-  const filteredLeads = leadSearch
-    ? leads.filter(l => l.name?.toLowerCase().includes(leadSearch.toLowerCase()) || l.phone?.includes(leadSearch))
-    : [];
+  const filteredVisits = visits.filter(v => 
+    v.lead_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    v.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const grouped = visits.reduce((acc, v) => {
-    const date = new Date(v.scheduled_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(v);
-    return acc;
-  }, {} as Record<string, Visit[]>);
-
-  const inp = {
-    width: '100%', padding: '0.65rem 0.875rem',
-    background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)',
-    borderRadius: '8px', color: 'var(--text-primary)', outline: 'none', fontSize: '0.875rem', boxSizing: 'border-box' as const,
+  const getAppointmentsForCell = (date: Date, hour: number) => {
+    return filteredVisits.filter(v => {
+      const vDate = new Date(v.scheduled_at);
+      return vDate.getDate() === date.getDate() && 
+             vDate.getMonth() === date.getMonth() &&
+             vDate.getFullYear() === date.getFullYear() &&
+             vDate.getHours() === hour;
+    });
   };
-  const lbl = { display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '0.35rem' };
+
+  const getAppointmentsForDay = (date: Date) => {
+    return filteredVisits.filter(v => {
+      const vDate = new Date(v.scheduled_at);
+      return vDate.getDate() === date.getDate() && 
+             vDate.getMonth() === date.getMonth() &&
+             vDate.getFullYear() === date.getFullYear();
+    });
+  };
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700 }}>Agendamentos de Visita</h1>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            {visits.length} visita(s) registrada(s).
-          </p>
+    <div className="calendar-container">
+      {/* Top Header */}
+      <header className="calendar-header">
+        <div className="calendar-controls">
+          <div className="month-display">
+            <span className="month-name">{monthName}</span>
+            <span className="year-display">{yearName}</span>
+          </div>
+          <div className="nav-buttons">
+            <button className="nav-btn" onClick={() => navigateDate(-1)}><ChevronLeft size={20} /></button>
+            <button className="nav-btn" onClick={() => navigateDate(1)}><ChevronRight size={20} /></button>
+          </div>
+          <button className="today-btn" onClick={() => setCurrentDate(new Date())}>Hoje</button>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <select id="filter-visit-status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ padding: '0.65rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none' }}
-          >
-            <option value="">Todos os status</option>
-            {Object.entries(STATUS_MAP).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}
-          </select>
-          <button id="btn-new-visit" onClick={() => setShowNewForm(s => !s)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-primary)', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600 }}
-          >
-            <Plus size={18} /> Nova Visita
+
+        <div className="calendar-actions">
+          <div className="search-wrapper">
+            <Search className="search-icon" size={18} />
+            <input 
+              type="text" 
+              placeholder="Buscar na agenda..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button className="nav-btn"><Filter size={18} /></button>
+          <div className="view-switcher">
+            <button className={`view-btn ${view === 'day' ? 'active' : ''}`} onClick={() => setView('day')}>Dia</button>
+            <button className={`view-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Semana</button>
+            <button className={`view-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Mês</button>
+          </div>
+          <button className="agendar-btn" onClick={() => setShowNewForm(true)}>
+            <Plus size={18} /> Agendar
           </button>
         </div>
-      </div>
+      </header>
 
-      {error && <div style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--accent-danger)', padding: '0.875rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</div>}
-
-      {/* Formulário de nova visita */}
-      {showNewForm && (
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.25rem' }}>Agendar Nova Visita</h3>
-          <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label style={lbl}>Buscar Lead Existente</label>
-              <input
-                id="visit-lead-search"
-                value={form.lead_id ? leads.find(l => l.id === form.lead_id)?.name || '' : leadSearch}
-                onChange={e => { setLeadSearch(e.target.value); set('lead_id', ''); set('lead_name', e.target.value); }}
-                placeholder="Buscar por nome ou telefone..."
-                style={inp}
-              />
-              {filteredLeads.length > 0 && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', zIndex: 10, maxHeight: '160px', overflowY: 'auto' }}>
-                  {filteredLeads.slice(0, 6).map(lead => (
-                    <button key={lead.id} type="button" onClick={() => { set('lead_id', lead.id); set('lead_name', lead.name || ''); set('lead_phone', lead.phone || ''); setLeadSearch(''); }}
-                      style={{ width: '100%', padding: '0.65rem 1rem', textAlign: 'left', display: 'flex', gap: '0.75rem', background: 'none', border: 'none', borderBottom: '1px solid var(--glass-border)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.875rem' }}
-                    >
-                      <span style={{ fontWeight: 600 }}>{lead.name}</span>
-                      <span style={{ color: 'var(--text-muted)' }}>{lead.phone}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <label style={lbl}>Nome do Visitante *</label>
-              <input id="visit-name" style={inp} value={form.lead_name} onChange={e => set('lead_name', e.target.value)} placeholder="Nome completo" />
-            </div>
-            <div>
-              <label style={lbl}>Telefone</label>
-              <input id="visit-phone" style={inp} value={form.lead_phone} onChange={e => set('lead_phone', e.target.value)} placeholder="(00) 00000-0000" />
-            </div>
-            <div>
-              <label style={lbl}>Data e Hora *</label>
-              <input id="visit-datetime" type="datetime-local" style={inp} value={form.scheduled_at} onChange={e => set('scheduled_at', e.target.value)} />
-            </div>
-            <div>
-              <label style={lbl}>Observações</label>
-              <input id="visit-notes" style={inp} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Interesse no curso X, veio por indicação..." />
-            </div>
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--glass-border)' }}>
-              <button type="button" onClick={() => setShowNewForm(false)} style={{ padding: '0.65rem 1.25rem', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancelar</button>
-              <button type="submit" id="btn-save-visit" disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-primary)', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', fontWeight: 600 }}>
-                {saving ? <Loader2 className="animate-spin" size={16} /> : <><CalendarDays size={16} /> Agendar</>}
-              </button>
-            </div>
-          </form>
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--accent-danger)', padding: '0.875rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
+          {error}
         </div>
       )}
 
-      {/* Lista de visitas agrupadas por data */}
-      {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="animate-spin" size={36} /></div>
-      ) : visits.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-          <CalendarDays size={52} style={{ margin: '0 auto 1rem' }} />
-          <h3 style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Nenhuma visita agendada</h3>
-          <p>Agende a primeira visita para um lead interessado.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {Object.entries(grouped).map(([date, dayVisits]) => (
-            <div key={date}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', paddingLeft: '0.25rem' }}>
-                {date}
+      {/* Calendar Grid */}
+      <div className="calendar-grid-wrapper glass-panel">
+        <div className="calendar-grid-header" style={{ 
+          gridTemplateColumns: view === 'month' ? 'repeat(7, 1fr)' : `80px repeat(${displayDays.length}, 1fr)` 
+        }}>
+          {view !== 'month' && <div className="time-column-header">Hora</div>}
+          {view === 'month' ? (
+            ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
+              <div key={d} className="header-cell">
+                <span className="day-name">{d}</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {dayVisits.map(visit => {
-                  const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
-                  const StIcon = st.icon;
-                  const time = new Date(visit.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            ))
+          ) : (
+            displayDays.map((day, i) => (
+              <div key={i} className={`header-cell ${isToday(day) ? 'active' : ''}`}>
+                <span className="day-name">{day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</span>
+                <span className="day-number">{day.getDate()}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="calendar-grid-content" style={{ 
+          gridTemplateColumns: view === 'month' ? 'repeat(7, 1fr)' : `80px repeat(${displayDays.length}, 1fr)` 
+        }}>
+          {view === 'month' ? (
+            displayDays.map((day, i) => {
+              const dayVisits = getAppointmentsForDay(day);
+              const isOtherMonth = day.getMonth() !== currentDate.getMonth();
+              return (
+                <div key={i} className={`grid-cell month-cell ${isToday(day) ? 'active' : ''} ${isOtherMonth ? 'other-month' : ''}`} style={{ height: '120px' }}>
+                  <span className="month-day-number">{day.getDate()}</span>
+                  <div className="month-visit-indicators">
+                    {dayVisits.slice(0, 3).map(v => (
+                      <div key={v.id} className="visit-dot" style={{ backgroundColor: STATUS_MAP[v.status]?.color || 'var(--accent-primary)' }} />
+                    ))}
+                    {dayVisits.length > 3 && <span className="more-count">+{dayVisits.length - 3}</span>}
+                  </div>
+                  <div className="click-layer" onClick={() => { setCurrentDate(day); setView('day'); }} />
+                </div>
+              );
+            })
+          ) : (
+            HOURS.map(hour => (
+              <div key={`row-${hour}`} style={{ display: 'contents' }}>
+                <div key={`label-${hour}`} className="time-slot-label">
+                  {String(hour).padStart(2, '0')}:00
+                </div>
+                {displayDays.map((day, i) => {
+                  const cellAppointments = getAppointmentsForCell(day, hour);
                   return (
-                    <div key={visit.id} id={`visit-${visit.id}`} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderLeft: `3px solid ${st.color}`, borderRadius: '10px', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{ minWidth: '52px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{time}</div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{visit.lead_name}</div>
-                        {visit.lead_phone && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{visit.lead_phone}</div>}
-                        {visit.notes && <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', fontStyle: 'italic' }}>{visit.notes}</div>}
-                      </div>
-                      <select
-                        value={visit.status}
-                        onChange={e => updateStatus(visit.id, e.target.value)}
-                        style={{ background: `${st.color}1a`, color: st.color, border: `1px solid ${st.color}40`, borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
-                      >
-                        {Object.entries(STATUS_MAP).map(([value, meta]) => (
-                          <option key={value} value={value}>{meta.label}</option>
-                        ))}
-                      </select>
+                    <div key={`${i}-${hour}`} className="grid-cell">
+                      {cellAppointments.map(visit => {
+                        const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
+                        return (
+                          <div 
+                            key={visit.id} 
+                            className="appointment-card"
+                            onClick={(e) => { e.stopPropagation(); setSelectedVisit(visit); }}
+                            style={{ 
+                              backgroundColor: `${st.color}22`, 
+                              borderColor: st.color,
+                              color: st.color
+                            }}
+                          >
+                            <div className="appointment-time">
+                              {new Date(visit.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            <div className="appointment-name">{visit.lead_name}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
+      </div>
+
+      {loading && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.1)', zIndex: 50, borderRadius: 'var(--radius-lg)' }}>
+          <Loader2 className="animate-spin" size={36} />
+        </div>
+      )}
+
+      {/* Modals */}
+      {mounted && (showNewForm || selectedVisit) && createPortal(
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)', 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          zIndex: 99999, 
+          backdropFilter: 'blur(8px)',
+          padding: '1rem'
+        }} onClick={() => { setShowNewForm(false); setSelectedVisit(null); }}>
+          
+          <div 
+            className="glass-panel animate-in" 
+            style={{ 
+              padding: '2rem', 
+              width: '100%', 
+              maxWidth: '500px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative'
+            }} 
+            onClick={e => e.stopPropagation()}
+          >
+            {showNewForm ? (
+              <>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: '#fff' }}>Agendar Nova Visita</h3>
+                <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                  <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Buscar Lead Existente</label>
+                    <div style={{ position: 'relative' }}>
+                      <input 
+                        id="visit-lead-search" 
+                        value={leadSearch}
+                        onChange={e => handleLeadSearch(e.target.value)}
+                        placeholder="Pesquisar por nome ou telefone..." 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                      />
+                      {leadSuggestions.length > 0 && (
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '100%', 
+                          left: 0, 
+                          right: 0, 
+                          background: 'var(--bg-secondary)', 
+                          border: '1px solid var(--glass-border)', 
+                          borderRadius: '8px', 
+                          zIndex: 10,
+                          marginTop: '4px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                        }}>
+                          {leadSuggestions.map(lead => (
+                            <button 
+                              key={lead.id} 
+                              type="button" 
+                              onClick={() => selectLead(lead)}
+                              style={{ 
+                                width: '100%', 
+                                padding: '0.75rem 1rem', 
+                                textAlign: 'left', 
+                                borderBottom: '1px solid var(--glass-border)',
+                                color: '#fff',
+                                display: 'flex',
+                                flexDirection: 'column'
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{lead.name}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{lead.phone}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nome Completo *</label>
+                    <input 
+                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                      value={form.lead_name} 
+                      onChange={e => setFormField('lead_name', e.target.value)} 
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
+                    <input 
+                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                      value={form.lead_phone} 
+                      onChange={e => setFormField('lead_phone', maskPhone(e.target.value))} 
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data e Hora *</label>
+                    <input 
+                      type="datetime-local" 
+                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }} 
+                      value={form.scheduled_at} 
+                      onChange={e => setFormField('scheduled_at', e.target.value)} 
+                      required
+                    />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => { setShowNewForm(false); setLeadSearch(''); setLeadSuggestions([]); }} 
+                      style={{ color: 'var(--text-secondary)', fontWeight: 500 }}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="agendar-btn" disabled={saving} style={{ padding: '0.75rem 2rem' }}>
+                      {saving ? <Loader2 className="animate-spin" size={18} /> : 'Confirmar Agendamento'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : selectedVisit ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>{selectedVisit.lead_name}</h3>
+                    <div style={{ display: 'flex', gap: '0.75rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={14} /> {new Date(selectedVisit.scheduled_at).toLocaleString('pt-BR')}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedVisit(null)} style={{ color: 'var(--text-muted)' }}><XCircle size={24} /></button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
+                     <div style={{ color: '#fff', fontWeight: 600 }}>{maskPhone(selectedVisit.leads?.phone || selectedVisit.lead_phone || '') || 'Não informado'}</div>
+                   </div>
+                   
+                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Status</label>
+                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: STATUS_MAP[selectedVisit.status]?.color, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', padding: '0.25rem 0.75rem', background: `${STATUS_MAP[selectedVisit.status]?.color}11`, borderRadius: '20px', border: `1px solid ${STATUS_MAP[selectedVisit.status]?.color}33` }}>
+                        {STATUS_MAP[selectedVisit.status]?.label}
+                     </div>
+                   </div>
+
+                   {selectedVisit.notes && (
+                     <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
+                       <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: '1.5' }}>{selectedVisit.notes}</div>
+                     </div>
+                   )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+                   <button 
+                    className="agendar-btn" 
+                    style={{ flex: 1, justifyContent: 'center' }} 
+                    onClick={() => { /* TODO: Edit logic */ }}
+                   >
+                     Editar Visita
+                   </button>
+                   <button 
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
+                    onClick={() => { /* TODO: Delete logic */ }}
+                   >
+                     Excluir
+                   </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GraduationCap, Plus, Loader2, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { maskPhone } from '@/utils/masks';
 
 interface Enrollment {
   id: string;
@@ -149,7 +150,7 @@ export default function EnrollmentsPage() {
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{en.classes?.name || '—'}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(en.classes as any)?.courses?.name || ''}</div>
                     </td>
-                    <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_phone || '—'}</td>
+                    <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_phone ? maskPhone(en.student_phone) : '—'}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <span style={{ fontSize: '0.75rem', padding: '0.28rem 0.65rem', borderRadius: '999px', background: `${st.color}1a`, color: st.color, fontWeight: 600 }}>
                         {st.label}

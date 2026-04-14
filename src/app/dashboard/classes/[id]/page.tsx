@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, UserPlus, Users, CheckCircle, XCircle, AlertCircle, Clock, ChevronRight } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { maskPhone } from '@/utils/masks';
 
 interface Enrollment {
   id: string;
@@ -175,7 +176,7 @@ export default function ClassDetailPage() {
                       <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{en.student_name}</div>
                       {en.student_email && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{en.student_email}</div>}
                     </td>
-                    <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_phone || '—'}</td>
+                    <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_phone ? maskPhone(en.student_phone) : '—'}</td>
                     <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_cpf || '—'}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <select
