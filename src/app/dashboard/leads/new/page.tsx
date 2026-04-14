@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Phone, User, FileText, ArrowLeft, Loader2 } from 'lucide-react';
 import { leadService } from '@/services';
+import { maskPhone } from '@/utils/masks';
 
 export default function NewLeadPage() {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function NewLeadPage() {
           </div>
           <div>
             <label style={labelStyle}><Phone size={14} /> Telefone / WhatsApp *</label>
-            <input type="tel" required placeholder="+55 11 99999-0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            <input type="tel" required placeholder="(00) 00000-0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })} style={inputStyle} />
           </div>
           <div>
             <label style={labelStyle}><FileText size={14} /> Observações</label>

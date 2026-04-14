@@ -5,6 +5,7 @@ import { messageService, leadService } from '@/services';
 import { 
   Search, User, Bot, UserCog, Send, Loader2, MessageSquare, ArrowLeft
 } from 'lucide-react';
+import { maskPhone } from '@/utils/masks';
 import styles from './Chat.module.css';
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -238,7 +239,7 @@ export default function ChatPage() {
                   <User size={20} />
                 </div>
                 <div>
-                  <div className={styles.headerName}>{selectedLead.name || selectedLead.phone}</div>
+                  <div className={styles.headerName}>{selectedLead.name || maskPhone(selectedLead.phone)}</div>
                   <div className={styles.headerStatus}>
                     {selectedLead.status === 'human_handling' ? (
                        <><UserCog size={12} color="var(--accent-warning)" /> Humano assumiu</>

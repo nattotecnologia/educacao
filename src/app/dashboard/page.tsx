@@ -9,6 +9,7 @@ const WeeklyChart = dynamic(() => import('./components/WeeklyChart'), {
 });
 import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2 } from 'lucide-react';
 import { authService } from '@/services';
+import { maskPhone } from '@/utils/masks';
 import styles from './Dashboard.module.css';
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -202,7 +203,7 @@ export default function Dashboard() {
                   <div className={styles.leadDetails}>
                     <span className={styles.leadName}>{lead.name || 'Sem nome'}</span>
                     <span className={styles.leadPhone}>
-                      <Phone size={11} /> {lead.phone}
+                      <Phone size={11} /> {maskPhone(lead.phone)}
                     </span>
                   </div>
                   <span className={styles.leadStatus} style={{ color: statusMap[lead.status]?.color }}>
