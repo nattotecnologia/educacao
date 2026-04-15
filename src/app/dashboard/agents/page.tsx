@@ -6,7 +6,7 @@ import {
   Bot, Settings, Play, Pause, Plus, Activity, Cpu, Loader2, AlertCircle, BrainCircuit
 } from 'lucide-react';
 import { agentService } from '@/services';
-import { getInstitutionSettings, updateInstitutionSettings } from '../settings/actions';
+import { getInstitutionSettings, updateInstitutionSettings, updateTokenQuota } from '../settings/actions';
 import styles from './Agents.module.css';
 import { useNotification } from '@/contexts/NotificationContext';
 
@@ -27,6 +27,10 @@ export default function AgentsPage() {
   });
   const [savingAi, setSavingAi] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState(0);
+  const [tokenQuota, setTokenQuota] = useState(1000000);
+  const [newQuota, setNewQuota] = useState('');
+  const [savingQuota, setSavingQuota] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -46,6 +50,11 @@ export default function AgentsPage() {
           openrouter_key: instData.openrouter_key || '',
           ai_model: instData.ai_model || ''
         });
+        const quota = instData.ai_token_quota ?? 1000000;
+        const usage = instData.ai_token_usage ?? 0;
+        setTokenQuota(quota);
+        setTokenUsage(usage);
+        setNewQuota(String(quota));
       }
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar dados.');
@@ -71,6 +80,24 @@ export default function AgentsPage() {
       addNotification({ type: 'error', title: 'Erro', message: err.message || 'Falha ao salvar.' });
     } finally {
       setSavingAi(false);
+    }
+  };
+
+  const handleSaveQuota = async () => {
+    const quotaNum = parseInt(newQuota, 10);
+    if (isNaN(quotaNum) || quotaNum < 1000) {
+      addNotification({ type: 'error', title: 'Erro', message: 'A cota mínima é 1.000 tokens.' });
+      return;
+    }
+    setSavingQuota(true);
+    try {
+      await updateTokenQuota(quotaNum);
+      setTokenQuota(quotaNum);
+      addNotification({ type: 'success', title: 'Cota Atualizada', message: `Nova cota: ${quotaNum.toLocaleString('pt-BR')} tokens.` });
+    } catch (err: any) {
+      addNotification({ type: 'error', title: 'Erro', message: err.message || 'Falha ao atualizar cota.' });
+    } finally {
+      setSavingQuota(false);
     }
   };
 
@@ -111,9 +138,72 @@ export default function AgentsPage() {
 
       {showAiSettings && (
         <div className="glass-panel animate-in" style={{ padding: '1.5rem', marginBottom: '2rem', border: '1px solid var(--accent-primary)' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <BrainCircuit size={20} /> Configuração Global da Inteligência
           </h3>
+
+          {/* --- Barra de Progresso de Tokens --- */}
+          {(() => {
+            const pct = tokenQuota > 0 ? Math.min((tokenUsage / tokenQuota) * 100, 100) : 0;
+            const barColor = pct < 60
+              ? '#22c55e'
+              : pct < 85
+              ? '#f59e0b'
+              : '#ef4444';
+            return (
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Activity size={13} /> Uso de Tokens da LLM
+                  </span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: barColor }}>
+                    {pct.toFixed(1)}%
+                  </span>
+                </div>
+                {/* Track */}
+                <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '99px', overflow: 'hidden', position: 'relative' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${pct}%`,
+                      background: `linear-gradient(90deg, #22c55e, ${barColor})`,
+                      borderRadius: '99px',
+                      transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+                      boxShadow: `0 0 8px ${barColor}66`,
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.45rem' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {tokenUsage.toLocaleString('pt-BR')} tokens usados
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Cota: {tokenQuota.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                {/* Ajuste de cota */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    value={newQuota}
+                    onChange={(e) => setNewQuota(e.target.value)}
+                    placeholder="Nova cota (tokens)"
+                    style={{ flex: 1, padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '7px', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+                  />
+                  <button
+                    className="custom-button"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}
+                    onClick={handleSaveQuota}
+                    disabled={savingQuota}
+                  >
+                    {savingQuota ? <Loader2 size={14} className="animate-spin" /> : 'Salvar Cota'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* --- Configurações de Provedor/Modelo --- */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <div>
               <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Provedor Principal</label>

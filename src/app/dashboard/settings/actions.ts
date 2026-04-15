@@ -81,6 +81,34 @@ export async function updateInstitutionSettings(data: any) {
   }
 }
 
+export async function updateTokenQuota(quota: number) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Não autorizado");
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('institution_id, role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.institution_id) throw new Error("Instituição não encontrada");
+    if (profile.role !== 'admin') throw new Error("Apenas administradores podem alterar a cota.");
+
+    const { error } = await supabase
+      .from('institutions')
+      .update({ ai_token_quota: quota })
+      .eq('id', profile.institution_id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Erro em updateTokenQuota:', error);
+    throw error;
+  }
+}
+
 export async function getPlatformSettings() {
   try {
     const supabase = await createClient();

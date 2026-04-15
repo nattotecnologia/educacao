@@ -51,9 +51,17 @@ export default function Dashboard() {
       }
 
       const res = await fetch(`/api/dashboard/stats?institution_id=${profile.institution_id}`);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setStats(data);
+      
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setStats(data);
+      } else {
+        const text = await res.text();
+        console.error(`Erro: o servidor não retornou JSON (Status ${res.status}):`, text.substring(0, 150));
+        throw new Error(`Erro ao carregar estatísticas. O endpoint /api/dashboard/stats retornou um HTML.`);
+      }
     } catch (err: any) {
       console.error('Erro ao buscar stats:', err);
       setError(err.message || 'Erro ao carregar estatísticas.');

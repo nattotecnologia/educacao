@@ -179,6 +179,11 @@ function buildSystemPrompt(
     '```',
     '- Use a "Data e Hora Atuais" do contexto para calcular corretamente o ano, mês e dia desejado no ISO 8601.',
     '',
+    '⚠️ REGRA DE SILÊNCIO DURANTE EXECUÇÃO (CRÍTICO)',
+    '- NUNCA diga frases como "Agendado!", "Pronto!", "Já fiz" ou "Tudo certo" no MESMO turno em que você aciona a ferramenta `register_visit` ou `register_enrollment`.',
+    '- O sistema filtrará sua resposta inicial e pedirá que você confirme apenas APÓS o sucesso da gravação no banco.',
+    '- Se você antecipar o sucesso, o usuário receberá uma informação falsa caso haja um erro técnico.',
+    '',
     '⚠️ REGRA DE OURO 4: EXECUÇÃO DE MATRÍCULA',
     '- Utilize a função `register_enrollment` apenas após obter os dados necessários (aluno, e-mail e turma).'
   ].join('\n');
@@ -321,23 +326,46 @@ async function executeTool(
     return `✅ Matrícula registrada com sucesso! ${student_name} foi pré-matriculado(a) na turma "${class_name}". Nossa equipe entrará em contato para confirmar os próximos passos e enviar as informações de pagamento.`;
   }
 
-  if (toolName === 'register_visit') {
-    const { lead_name, lead_phone, scheduled_at, notes } = args;
+    if (toolName === 'register_visit') {
+      const { lead_name, lead_phone, scheduled_at, notes } = args;
 
-    const { error } = await supabase.from('visit_appointments').insert({
-      institution_id: institutionId,
-      lead_id: leadId || null,
-      lead_name,
-      lead_phone: lead_phone || phone,
-      scheduled_at,
-      notes: notes || null,
-      status: 'scheduled',
-    });
+      // TRAVA DE IDEMPOTÊNCIA: Evita agendamentos duplicados por retries da Evolution
+      // Verifica se já existe um agendamento para este lead no mesmo minuto
+      const schedDate = new Date(scheduled_at);
+      const windowStart = new Date(schedDate.getTime() - 30 * 1000).toISOString(); // -30s
+      const windowEnd = new Date(schedDate.getTime() + 30 * 1000).toISOString();   // +30s
 
-    if (error) {
-      console.error('[Webhook] Erro ao registrar visita:', error.message);
-      return '❌ Não consegui registrar sua visita. Por favor, tente novamente ou ligue para nós.';
-    }
+      const { data: existing } = await supabase
+        .from('visit_appointments')
+        .select('id, scheduled_at')
+        .eq('institution_id', institutionId)
+        .eq('lead_id', leadId)
+        .gte('scheduled_at', windowStart)
+        .lte('scheduled_at', windowEnd)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${scheduled_at}`);
+        const dateFormatted = new Date(existing[0].scheduled_at).toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+        return `✅ Visita já estava agendada! ${lead_name}, confirmamos sua vinda para o dia ${dateFormatted}. Caso precise reagendar, conte comigo!`;
+      }
+
+      const { error } = await supabase.from('visit_appointments').insert({
+        institution_id: institutionId,
+        lead_id: leadId || null,
+        lead_name,
+        lead_phone: lead_phone || phone,
+        scheduled_at,
+        notes: notes || null,
+        status: 'scheduled',
+      });
+
+      if (error) {
+        console.error('[Webhook] Erro ao registrar visita:', error.message);
+        return '❌ Não consegui registrar sua visita. Por favor, tente novamente ou ligue para nós.';
+      }
 
     // Formata a data de forma amigável
     const dateFormatted = new Date(scheduled_at).toLocaleString('pt-BR', {
@@ -645,6 +673,7 @@ export async function POST(request: NextRequest) {
 
     // 14. Chama a IA com Function Calling
     let botMessage: string;
+    let totalTokensUsed = 0;
 
     try {
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -660,6 +689,18 @@ export async function POST(request: NextRequest) {
         tools: AGENT_TOOLS,
         tool_choice: 'auto',
       });
+
+      // Acumula tokens da 1ª chamada (Extração Resiliente)
+      const usage1 = aiResponse.usage;
+      if (usage1) {
+        const tokens = usage1.total_tokens || ((usage1.prompt_tokens || 0) + (usage1.completion_tokens || 0));
+        if (tokens > 0) {
+          totalTokensUsed += tokens;
+          console.log(`[Webhook] Tokens (1ª chamada - ${model}): +${tokens}`);
+        }
+      } else {
+        console.log(`[Webhook] Aviso: Uso de tokens não retornado na 1ª chamada para o modelo ${model}.`);
+      }
 
       const choice = aiResponse.choices[0];
 
@@ -680,6 +721,10 @@ export async function POST(request: NextRequest) {
         }
         toolCallId = toolCall.id;
         hasToolCall = true;
+
+        // Mute the raw string so it doesn't get sent back.
+        // If the AI included "I'm scheduling" in the text, we don't want the user to see it yet.
+        choice.message.content = null;
       }
       // 2) Fallback agressivo: Verifica se o modelo retornou raw text `<tool_call>` vazado ou JSON da tool.
       else if (choice.message?.content) {
@@ -741,6 +786,18 @@ export async function POST(request: NextRequest) {
           toolArgs.lead_phone = phoneNumber;
         }
 
+        // Tenta normalizar a data para ISO caso venha em formato amigável
+        if (toolArgs.scheduled_at) {
+          try {
+            const dateObj = new Date(toolArgs.scheduled_at);
+            if (!isNaN(dateObj.getTime())) {
+              toolArgs.scheduled_at = dateObj.toISOString();
+            }
+          } catch (e) {
+             console.warn('[Webhook] Data inválida recebida da IA:', toolArgs.scheduled_at);
+          }
+        }
+
         // Executa a ação no banco
         const toolResult = await executeTool(
           toolName,
@@ -769,6 +826,16 @@ export async function POST(request: NextRequest) {
           max_tokens: maxTokens,
         });
 
+        // Acumula tokens da 2ª chamada (Extração Resiliente)
+        const usage2 = confirmationResponse.usage;
+        if (usage2) {
+          const tokens = usage2.total_tokens || ((usage2.prompt_tokens || 0) + (usage2.completion_tokens || 0));
+          if (tokens > 0) {
+            totalTokensUsed += tokens;
+            console.log(`[Webhook] Tokens (Confirmação - ${model}): +${tokens}`);
+          }
+        }
+
         botMessage =
           confirmationResponse.choices[0]?.message?.content ||
           toolResult; // usa o resultado diretamente caso a confirmação falhe
@@ -794,6 +861,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[Webhook] Resposta da IA: "${botMessage.substring(0, 100)}..."`);
+
+    // 15a. Incrementa contador de tokens da instituição (fire-and-forget)
+    if (totalTokensUsed > 0) {
+      supabaseAdmin.rpc('increment_token_usage', {
+        p_institution_id: institution.id,
+        p_tokens: totalTokensUsed,
+      }).then(({ error: rpcErr }) => {
+        if (rpcErr) console.error('[Webhook] Erro ao atualizar token usage:', rpcErr.message);
+        else console.log(`[Webhook] Tokens acumulados: +${totalTokensUsed} | Modelo: ${model}`);
+      });
+    }
 
     // 15. Salva resposta no histórico
     await supabaseAdmin.from('messages').insert({
