@@ -181,6 +181,8 @@ function buildSystemPrompt(
     '',
     '⚠️ REGRA ANTI-ALUCINAÇÃO (MANDATÓRIA)',
     '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORÁRIO.',
+    '- NUNCA invente endereços, ruas, números de telefone, e-mails institucionais ou CNPJ fictícios (ex: Av. Paulista, (11) 3333-4444).',
+    '- Se o endereço ou telefone da unidade não constar no seu prompt ou base de dados, APENAS DIGA que a secretaria entrará em contato logo em seguida para enviar a localização completa e o mapa.',
     '- Se o usuário disser apenas "Quero agendar uma visita", você DEVE perguntar qual a data e o horário desejados e ESPERAR A RESPOSTA antes de acionar a ferramenta.',
     '- Se você disser em texto que "a visita foi agendada" mas não engatilhar a ferramenta, VOCÊ ESTARÁ MENTINDO para o usuário.',
     '',
