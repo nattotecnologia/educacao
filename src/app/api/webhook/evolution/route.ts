@@ -179,6 +179,11 @@ function buildSystemPrompt(
     '```',
     '- Use a "Data e Hora Atuais" do contexto para calcular corretamente o ano, mês e dia desejado no ISO 8601.',
     '',
+    '⚠️ REGRA ANTI-ALUCINAÇÃO (MANDATÓRIA)',
+    '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORÁRIO.',
+    '- Se o usuário disser apenas "Quero agendar uma visita", você DEVE perguntar qual a data e o horário desejados e ESPERAR A RESPOSTA antes de acionar a ferramenta.',
+    '- É OBRIGATÓRIO que o usuário concorde com um horário específico (ex: "As 11h tá bom?", "Sim") ANTES de você salvar no banco.',
+    '',
     '⚠️ REGRA DE SILÊNCIO DURANTE EXECUÇÃO (CRÍTICO)',
     '- NUNCA diga frases como "Agendado!", "Pronto!", "Já fiz" ou "Tudo certo" no MESMO turno em que você aciona a ferramenta `register_visit` ou `register_enrollment`.',
     '- O sistema filtrará sua resposta inicial e pedirá que você confirme apenas APÓS o sucesso da gravação no banco.',
@@ -246,7 +251,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'register_visit',
       description:
-        'Agenda uma visita à instituição. Use assim que tiver o nome e a data/hora desejada. Caso tenha a informação no contexto, não pergunte novamente.',
+        'Agenda uma visita à instituição. OBRIGATÓRIO: Use SOMENTE DEPOIS que o usuário informar CLARAMENTE a data e a hora da visita. Se ele não informou ambos, não use esta ferramenta e pergunte o horário preferido.',
       parameters: {
         type: 'object',
         properties: {
