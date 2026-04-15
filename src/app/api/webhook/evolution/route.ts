@@ -172,8 +172,8 @@ function buildSystemPrompt(
     '',
     '⚠️ REGRA DE OURO 3: EXECUÇÃO DO AGENDAMENTO DE VISITA',
     '- Se o usuário já tiver informado a data e hora desejada para visita, ou confirmar (ex: "sim", "isso", "pode ser"), VOCÊ DEVE EXECUTAR A FERRAMENTA `register_visit` NA MESMA HORA.',
-    '- É OBRIGATÓRIO salvar o agendamento no banco de dados. Jamais minta que "A visita foi agendada" sem engatilhar a ferramenta.',
-    '- SE VOCÊ OU O SEU PROVEDOR NÃO TIVEREM SUPORTE A FUNCTION CALLING NATIVO, você DEVE retornar EXCLUSIVAMENTE o bloco de código JSON abaixo, sem mais nenhuma palavra:',
+    '- OBRIGATÓRIO salvar o agendamento no banco usando a ferramenta. Jamais minta que "A visita foi agendada" sem enviar o bloco JSON apropriado ou acionar a ferramenta.',
+    '- SE VOCÊ NÃO ACIONAR A FERRAMENTA DE FUNCTION CALLING, você DEVE retornar EXCLUSIVAMENTE o bloco de código JSON abaixo, sem mais nenhuma palavra:',
     '```json',
     '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:ss-03:00" } }',
     '```',
@@ -182,12 +182,11 @@ function buildSystemPrompt(
     '⚠️ REGRA ANTI-ALUCINAÇÃO (MANDATÓRIA)',
     '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORÁRIO.',
     '- Se o usuário disser apenas "Quero agendar uma visita", você DEVE perguntar qual a data e o horário desejados e ESPERAR A RESPOSTA antes de acionar a ferramenta.',
-    '- É OBRIGATÓRIO que o usuário concorde com um horário específico (ex: "As 11h tá bom?", "Sim") ANTES de você salvar no banco.',
+    '- Se você disser em texto que "a visita foi agendada" mas não engatilhar a ferramenta, VOCÊ ESTARÁ MENTINDO para o usuário.',
     '',
     '⚠️ REGRA DE SILÊNCIO DURANTE EXECUÇÃO (CRÍTICO)',
     '- NUNCA diga frases como "Agendado!", "Pronto!", "Já fiz" ou "Tudo certo" no MESMO turno em que você aciona a ferramenta `register_visit` ou `register_enrollment`.',
-    '- O sistema filtrará sua resposta inicial e pedirá que você confirme apenas APÓS o sucesso da gravação no banco.',
-    '- Se você antecipar o sucesso, o usuário receberá uma informação falsa caso haja um erro técnico.',
+    '- Se você não enviou o bloco JSON, ESTÁ PROIBIDO de dizer que agendou.',
     '',
     '⚠️ REGRA DE OURO 4: EXECUÇÃO DE MATRÍCULA',
     '- Utilize a função `register_enrollment` apenas após obter os dados necessários (aluno, e-mail e turma).'
@@ -744,15 +743,31 @@ export async function POST(request: NextRequest) {
           } else {
             // Tenta detectar `{ "name": "register_visit" ... }` no meio do texto bruto
             if (rawContent.includes('"register_visit"') || rawContent.includes('"register_enrollment"')) {
-              const jsonMatch = rawContent.match(/```json\n?([\s\S]*?)```/);
+              const jsonMatch = rawContent.match(/```(?:json)?\n?([\s\S]*?)```/);
               if (jsonMatch && jsonMatch[1]) {
-                 parsed = JSON.parse(jsonMatch[1]);
-              } else {
-                 const possibleJsonMatch = rawContent.match(/({[\s\S]*?"name"\s*:\s*"(?:register_visit|register_enrollment)"[\s\S]*})/i);
-                 if (possibleJsonMatch && possibleJsonMatch[1]) {
-                    parsed = JSON.parse(possibleJsonMatch[1]);
+                 try {
+                     parsed = JSON.parse(jsonMatch[1]);
+                     if (Array.isArray(parsed)) parsed = parsed[0];
+                 } catch (e) {
+                     console.error('[Webhook] Failed to parse JSON block', e);
                  }
               }
+              
+              if (!parsed || (!parsed.name && !parsed.function)) {
+                 const possibleJsonMatch = rawContent.match(/({[\s\S]*?"name"\s*:\s*"(?:register_visit|register_enrollment)"[\s\S]*})/i);
+                 if (possibleJsonMatch && possibleJsonMatch[1]) {
+                    try {
+                        parsed = JSON.parse(possibleJsonMatch[1]);
+                    } catch (e) {
+                        console.error('[Webhook] Failed to parse possible JSON', e);
+                    }
+                 }
+              }
+            }
+            
+            // Tratamento extra caso o JSON use o formato nativo aninhado: { "function": { "name": ..., "arguments": ... } }
+            if (parsed && parsed.function && parsed.function.name) {
+                parsed = parsed.function;
             }
           }
 
@@ -855,6 +870,14 @@ export async function POST(request: NextRequest) {
 
         if (!botMessage.trim()) {
            botMessage = agent.fallback_message || 'Desculpe, tive um problema ao processar sua mensagem.';
+        }
+        
+        // Interceptação de alucinação (Se confirmou agendamento mas não rodou a ferramenta, é alucinação)
+        const lowerBotMsg = botMessage.toLowerCase();
+        if ((lowerBotMsg.includes('agendada') || lowerBotMsg.includes('agendado') || lowerBotMsg.includes('marcad') || lowerBotMsg.includes('confirmado')) && 
+            (lowerBotMsg.includes('visita') || lowerBotMsg.includes('horário') || lowerBotMsg.includes('dia'))) {
+            botMessage = '⚠️ Tive um pequeno problema de sistema ao registrar no banco de dados. Para garantir, você me confirma o dia e a hora novamente, por favor?';
+            console.warn('[Webhook] ALUCINAÇÃO INTERCEPTADA:', choice.message?.content);
         }
       }
     } catch (aiError: unknown) {
