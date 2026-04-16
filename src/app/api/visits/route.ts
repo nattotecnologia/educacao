@@ -57,14 +57,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Nome do lead e data são obrigatórios.' }, { status: 400 });
   }
 
-  const appointmentDate = new Date(scheduled_at);
-  const now = new Date();
+  const nowBrtObj = new Date(new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'));
+  const apptStrObj = new Date(scheduled_at.substring(0, 19));
 
-  if (appointmentDate < now) {
+  if (apptStrObj < nowBrtObj) {
     return NextResponse.json({ error: 'Não é possível agendar visitas em datas ou horários passados.' }, { status: 400 });
   }
 
-  const minutes = appointmentDate.getMinutes();
+  const minutes = apptStrObj.getMinutes();
   if (minutes !== 0 && minutes !== 30) {
     return NextResponse.json({ error: 'O agendamento deve ser feito em intervalos de 30 minutos (ex: 14:00, 14:30).' }, { status: 400 });
   }

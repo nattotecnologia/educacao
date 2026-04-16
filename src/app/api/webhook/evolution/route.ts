@@ -336,11 +336,13 @@ async function executeTool(
     if (toolName === 'register_visit') {
       const { lead_name, lead_phone, scheduled_at, notes } = args;
 
-      // TRAVA DE IDEMPOTÊNCIA: Evita agendamentos duplicados por retries da Evolution
-      // Verifica se já existe um agendamento para este lead no mesmo minuto
-      const schedDate = new Date(scheduled_at);
-      const windowStart = new Date(schedDate.getTime() - 30 * 1000).toISOString(); // -30s
-      const windowEnd = new Date(schedDate.getTime() + 30 * 1000).toISOString();   // +30s
+      // O AI manda algo como "2026-04-16T14:00:00-03:00". Para manter '14:00' exato no banco (sem saltar 3h por causa de UTC), pegamos apenas a data/hora local.
+      const localTimeString = scheduled_at.substring(0, 19); // YYYY-MM-DDTHH:mm:ss
+
+      // Verifica idempotência
+      const schedTime = new Date(scheduled_at).getTime();
+      const windowStart = new Date(schedTime - 30 * 1000).toISOString().substring(0, 19);
+      const windowEnd = new Date(schedTime + 30 * 1000).toISOString().substring(0, 19);
 
       const { data: existing } = await supabase
         .from('visit_appointments')
@@ -352,8 +354,10 @@ async function executeTool(
         .limit(1);
 
       if (existing && existing.length > 0) {
-        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${scheduled_at}`);
-        const dateFormatted = new Date(existing[0].scheduled_at).toLocaleString('pt-BR', {
+        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${localTimeString}`);
+        const dateObj = new Date(existing[0].scheduled_at);
+        const dateFormatted = dateObj.toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
           day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
         });
         return `✅ Visita já estava agendada! ${lead_name}, confirmamos sua vinda para o dia ${dateFormatted}. Caso precise reagendar, conte comigo!`;
@@ -364,7 +368,7 @@ async function executeTool(
         lead_id: leadId || null,
         lead_name,
         lead_phone: lead_phone || phone,
-        scheduled_at,
+        scheduled_at: localTimeString,
         notes: notes || null,
         status: 'scheduled',
       });
@@ -374,14 +378,14 @@ async function executeTool(
         return '❌ Não consegui registrar sua visita. Por favor, tente novamente ou ligue para nós.';
       }
 
-    // Formata a data de forma amigável
-    const dateFormatted = new Date(scheduled_at).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Formata a data de forma amigável com fuso correto
+    const dateObjFormat = new Date();
+    const [year, month, day, hour, min] = localTimeString.split(/[-T:]/);
+    dateObjFormat.setFullYear(Number(year), Number(month) - 1, Number(day));
+    dateObjFormat.setHours(Number(hour), Number(min), 0);
+    
+    // Fallback amigável simples
+    const dateFormatted = `${day}/${month}/${year}, ${hour}:${min}`;
 
     return `✅ Visita agendada com sucesso! ${lead_name}, te esperamos no dia ${dateFormatted}. Você receberá uma confirmação. Caso precise reagendar, é só nos chamar! 😊`;
   }

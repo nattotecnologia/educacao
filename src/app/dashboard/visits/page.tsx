@@ -152,7 +152,14 @@ export default function VisitsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setVisits(data || []);
+      
+      const normalizedData = (data || []).map((v: any) => ({
+        ...v,
+        scheduled_at: v.scheduled_at.endsWith('Z') || v.scheduled_at.includes('+') 
+          ? v.scheduled_at.substring(0, 19) 
+          : v.scheduled_at
+      }));
+      setVisits(normalizedData);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -165,9 +172,10 @@ export default function VisitsPage() {
     if (!selectedVisit) return;
     
     const fullDateTime = new Date(`${editForm.scheduled_date}T${editForm.scheduled_time}`);
-    const now = new Date();
+    const nowBrtObj = new Date(new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'));
+    const apptStrObj = new Date(`${editForm.scheduled_date}T${editForm.scheduled_time}`);
 
-    if (fullDateTime < now && fullDateTime.getTime() !== new Date(selectedVisit.scheduled_at).getTime()) {
+    if (apptStrObj < nowBrtObj && apptStrObj.getTime() !== new Date(selectedVisit.scheduled_at.substring(0, 19)).getTime()) {
       setError('Não é possível reagendar para o passado.');
       return;
     }
@@ -181,7 +189,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
           lead_phone: editForm.lead_phone,
-          scheduled_at: fullDateTime.toISOString(),
+          scheduled_at: `${editForm.scheduled_date}T${editForm.scheduled_time}:00`,
           notes: editForm.notes,
           status: editForm.status
         }),
@@ -252,10 +260,10 @@ export default function VisitsPage() {
       return; 
     }
 
-    const fullDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
-    const now = new Date();
+    const apptStrObj = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    const nowBrtObj = new Date(new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'));
 
-    if (fullDateTime < now) {
+    if (apptStrObj < nowBrtObj) {
       setError('Não é possível agendar visitas em datas ou horários passados.');
       return;
     }
@@ -270,7 +278,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ 
           ...form, 
-          scheduled_at: fullDateTime.toISOString(),
+          scheduled_at: `${scheduledDate}T${scheduledTime}:00`,
           lead_id: form.lead_id || null 
         }),
       });
