@@ -175,7 +175,7 @@ function buildSystemPrompt(
     '- É OBRIGATÓRIO usar a sua capacidade de chamada de função (`register_visit`) para salvar a visita.',
     '- Se o seu sistema não lidar bem com chamadas de função nativas, retorne EXCLUSIVAMENTE o bloco de código JSON abaixo para o agendamento:',
     '```json',
-    '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:ss-03:00" } }',
+    '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:00" } }',
     '```',
     '- Use a "Data e Hora Atuais" do contexto para deduzir o ano, mês e dia.',
     '',
@@ -261,7 +261,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita OBRIGATORIAMENTE em formato ISO 8601 com o sufixo de fuso brasileiro (exemplo abstrato: YYYY-MM-DDTHH:mm:ss-03:00). Nunca esqueça do sufixo -03:00. Atenção ao Ano: cruze a "Data e Hora Atuais" do Contexto para deduzir o ano!',
+            description: 'Data e hora da visita. OBRIGATÓRIO: Coloque EXATAMENTE o número da hora que o usuário pediu no formato YYYY-MM-DDTHH:mm:00. NUNCA some ou subtraia horários. NÃO coloque sufixo de fuso horário (nem Z, nem -03:00). Apenas a hora pura.',
           },
           notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
         },
