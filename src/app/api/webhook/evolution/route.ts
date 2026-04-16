@@ -340,9 +340,9 @@ async function executeTool(
       const localTimeString = scheduled_at.substring(0, 19); // YYYY-MM-DDTHH:mm:ss
 
       // Verifica idempotência
-      const schedTime = new Date(scheduled_at).getTime();
-      const windowStart = new Date(schedTime - 30 * 1000).toISOString().substring(0, 19);
-      const windowEnd = new Date(schedTime + 30 * 1000).toISOString().substring(0, 19);
+      const schedTime = new Date(localTimeString + 'Z').getTime();
+      const windowStart = new Date(schedTime - 30 * 1000).toISOString().substring(0, 19) + 'Z';
+      const windowEnd = new Date(schedTime + 30 * 1000).toISOString().substring(0, 19) + 'Z';
 
       const { data: existing } = await supabase
         .from('visit_appointments')
@@ -368,7 +368,7 @@ async function executeTool(
         lead_id: leadId || null,
         lead_name,
         lead_phone: lead_phone || phone,
-        scheduled_at: localTimeString,
+        scheduled_at: localTimeString + 'Z', // Força banco a travar no horário cravado
         notes: notes || null,
         status: 'scheduled',
       });
