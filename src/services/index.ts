@@ -38,11 +38,20 @@ export const leadService = {
     status = '',
     page = 1,
     pageSize = 20,
-  }: { search?: string; status?: string; page?: number; pageSize?: number }) {
+    orderBy = 'created_at',
+    orderDirection = 'desc'
+  }: { 
+    search?: string; 
+    status?: string; 
+    page?: number; 
+    pageSize?: number;
+    orderBy?: string;
+    orderDirection?: 'asc' | 'desc';
+  }) {
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
+      .order(orderBy, { ascending: orderDirection === 'asc' })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
     if (search) {

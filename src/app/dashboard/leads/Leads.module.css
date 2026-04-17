@@ -113,6 +113,31 @@
   color: var(--text-muted);
   border-bottom: 1px solid var(--glass-border);
   letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortableHeader:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sortIcon {
+  opacity: 0.3;
+}
+
+.sortIconActive {
+  color: var(--accent-primary);
 }
 
 .table td {
@@ -177,6 +202,12 @@
 
 /* Filtro */
 .filterActions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.pageSizeControl, .statusControl {
   display: flex;
   align-items: center;
   gap: 0.75rem;

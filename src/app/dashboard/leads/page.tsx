@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { 
   Users, Search, Filter, MoreHorizontal, UserPlus, MessageCircle,
   Phone, Clock, Loader2, Bot, X, ChevronLeft, ChevronRight, CheckCircle2,
-  Trash2, Edit2
+  Trash2, Edit2, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { leadService } from '@/services';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -42,7 +42,7 @@ const statusMap: Record<string, { label: string; color: string; bg: string }> = 
   lost: { label: 'Perdido', color: 'var(--accent-danger)', bg: 'rgba(239, 68, 68, 0.1)' },
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -51,6 +51,9 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sortField, setSortField] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -86,7 +89,9 @@ export default function LeadsPage() {
         search: debouncedSearch,
         status: filterStatus,
         page,
-        pageSize: PAGE_SIZE,
+        pageSize,
+        orderBy: sortField,
+        orderDirection: sortOrder,
       });
       setLeads(result.data);
       setTotal(result.total);
@@ -95,7 +100,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filterStatus, page]);
+  }, [debouncedSearch, filterStatus, page, pageSize, sortField, sortOrder]);
 
   useEffect(() => {
     fetchLeads();
@@ -180,7 +185,24 @@ export default function LeadsPage() {
     });
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+    setPage(1);
+  };
+
+  const getSortIcon = (field: string) => {
+    if (sortField !== field) return <ArrowUpDown size={14} className={styles.sortIcon} />;
+    return sortOrder === 'asc' ? 
+      <ArrowUp size={14} className={styles.sortIconActive} /> : 
+      <ArrowDown size={14} className={styles.sortIconActive} />;
+  };
+
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className={styles.container}>
@@ -207,16 +229,30 @@ export default function LeadsPage() {
           />
         </div>
         <div className={styles.filterActions}>
-          <Filter size={16} style={{ color: 'var(--text-muted)' }} />
-          <select
-            className={styles.filterSelect}
-            value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-          >
-            {STATUS_LIST.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+          <div className={styles.pageSizeControl}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Mostrar:</span>
+            <select
+              className={styles.filterSelect}
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+            >
+              {PAGE_SIZE_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.statusControl}>
+            <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+            <select
+              className={styles.filterSelect}
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            >
+              {STATUS_LIST.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -235,10 +271,25 @@ export default function LeadsPage() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Nome / Telefone</th>
-                <th>Status</th>
+                <th onClick={() => handleSort('name')} className={styles.sortableHeader}>
+                  <div className={styles.headerContent}>
+                    <span>Nome / Telefone</span>
+                    {getSortIcon('name')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('status')} className={styles.sortableHeader}>
+                  <div className={styles.headerContent}>
+                    <span>Status</span>
+                    {getSortIcon('status')}
+                  </div>
+                </th>
                 <th>Origem</th>
-                <th>Data de entrada</th>
+                <th onClick={() => handleSort('created_at')} className={styles.sortableHeader}>
+                  <div className={styles.headerContent}>
+                    <span>Data de entrada</span>
+                    {getSortIcon('created_at')}
+                  </div>
+                </th>
                 <th>Ações</th>
               </tr>
             </thead>
