@@ -152,10 +152,16 @@ function buildSystemPrompt(
   // Capacidades que a IA pode acionar
   const capabilities = [
     '## SUAS CAPACIDADES E REGRAS DE OURO',
-    'Você pode ajudar o lead a realizar Matrículas e Agendamentos de Visitas.',
+    'Você pode ajudar o lead a realizar Matrículas e Agendamentos de Visitas. Você também pode LISTAR, CANCELAR e REAGENDAR visitas existentes.',
     '',
     '⚠️ REGRA DE FORMATACÃO (WHATSAPP)',
     '- No WhatsApp, o negrito é feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
+    '',
+    '⚠️ GERENCIAMENTO DE VISITAS EXISTENTES',
+    '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
+    '- Se o lead quiser cancelar uma visita, PRIMEIRO use `list_visits` para identificar o ID e DEPOIS use `cancel_visit`.',
+    '- Se o lead quiser reagendar, PRIMEIRO use `list_visits` para identificar o ID, confirme o novo horário e DEPOIS use `reschedule_visit`.',
+    '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar.',
     '',
     '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
     '- Antes de pedir qualquer dado, VALORIZE o interesse do lead.',
@@ -269,6 +275,58 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_visits',
+      description:
+        'Lista as visitas agendadas do lead atual. Use quando o lead perguntar sobre seus agendamentos, quiser ver quando tem visita marcada, ou antes de cancelar/reagendar para identificar qual visita alterar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          include_past: {
+            type: 'boolean',
+            description: 'Se true, inclui visitas passadas. Por padrão só retorna futuras.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'cancel_visit',
+      description:
+        'Cancela uma visita agendada. Use SOMENTE após confirmar com o lead qual visita deseja cancelar. Sempre use `list_visits` primeiro para obter o ID correto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          visit_id: { type: 'string', description: 'ID da visita a cancelar (obtido via list_visits)' },
+        },
+        required: ['visit_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'reschedule_visit',
+      description:
+        'Reagenda uma visita existente para uma nova data e hora. Use SOMENTE após confirmar com o lead a nova data/hora. Use `list_visits` antes para obter o ID correto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          visit_id: { type: 'string', description: 'ID da visita a reagendar (obtido via list_visits)' },
+          new_scheduled_at: {
+            type: 'string',
+            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00. NUNCA adicione sufixo de fuso horário.',
+          },
+        },
+        required: ['visit_id', 'new_scheduled_at'],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -277,7 +335,8 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
 
 async function executeTool(
   toolName: string,
-  args: Record<string, string>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  args: Record<string, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any, any, any>,
   institutionId: string,
@@ -285,6 +344,117 @@ async function executeTool(
   phone: string,
   classes: ClassRow[]
 ): Promise<string> {
+  // ── list_visits ──────────────────────────────────────────────────────────
+  if (toolName === 'list_visits') {
+    if (!leadId) return '❌ Não consegui identificar seu cadastro para buscar os agendamentos.';
+
+    const includePast = args.include_past === true || args.include_past === 'true';
+    const nowIso = new Date().toISOString();
+
+    let query = supabase
+      .from('visit_appointments')
+      .select('id, scheduled_at, status, notes')
+      .eq('lead_id', leadId)
+      .eq('institution_id', institutionId)
+      .order('scheduled_at', { ascending: true })
+      .limit(10);
+
+    if (!includePast) {
+      query = query.gte('scheduled_at', nowIso);
+    }
+
+    const { data: visits, error } = await query;
+
+    if (error) {
+      console.error('[Webhook] Erro ao listar visitas:', error.message);
+      return '❌ Tive um problema ao buscar seus agendamentos. Tente novamente.';
+    }
+
+    if (!visits || visits.length === 0) {
+      return 'ℹ️ Você não possui visitas agendadas no momento.';
+    }
+
+    const statusLabels: Record<string, string> = {
+      scheduled: '🕐 Agendada',
+      confirmed: '✅ Confirmada',
+      done: '🎓 Realizada',
+      cancelled: '❌ Cancelada',
+      no_show: '😔 Não compareceu',
+    };
+
+    const lines = visits.map((v) => {
+      const [year, month, day, hour, min] = v.scheduled_at.substring(0, 16).split(/[-T:]/);
+      const dateStr = `${day}/${month}/${year} às ${hour}:${min}`;
+      const statusLabel = statusLabels[v.status] || v.status;
+      return `• *${dateStr}* — ${statusLabel} (ID: ${v.id.substring(0, 8)})`;
+    });
+
+    return `📅 Seus agendamentos:\n\n${lines.join('\n')}\n\nSe quiser cancelar ou reagendar, me informe qual visita.`;
+  }
+
+  // ── cancel_visit ─────────────────────────────────────────────────────────
+  if (toolName === 'cancel_visit') {
+    const { visit_id } = args;
+    if (!visit_id) return '❌ Preciso do ID da visita para cancelar.';
+
+    // Garante que pertence ao lead e à instituição
+    const { data: visit, error: findErr } = await supabase
+      .from('visit_appointments')
+      .select('id, scheduled_at, status')
+      .eq('id', visit_id)
+      .eq('institution_id', institutionId)
+      .maybeSingle();
+
+    if (findErr || !visit) return '❌ Visita não encontrada ou sem permissão para cancelar.';
+    if (visit.status === 'cancelled') return 'ℹ️ Esta visita já estava cancelada.';
+
+    const { error } = await supabase
+      .from('visit_appointments')
+      .update({ status: 'cancelled' })
+      .eq('id', visit_id);
+
+    if (error) {
+      console.error('[Webhook] Erro ao cancelar visita:', error.message);
+      return '❌ Ocorreu um erro ao cancelar. Por favor, tente novamente.';
+    }
+
+    const [year, month, day, hour, min] = visit.scheduled_at.substring(0, 16).split(/[-T:]/);
+    return `✅ Visita do dia *${day}/${month}/${year} às ${hour}:${min}* cancelada com sucesso. Se quiser agendar uma nova data, é só me chamar!`;
+  }
+
+  // ── reschedule_visit ──────────────────────────────────────────────────────
+  if (toolName === 'reschedule_visit') {
+    const { visit_id, new_scheduled_at } = args;
+    if (!visit_id || !new_scheduled_at) return '❌ Preciso do ID da visita e do novo horário para reagendar.';
+
+    // Garante que pertence ao lead e à instituição
+    const { data: visit, error: findErr } = await supabase
+      .from('visit_appointments')
+      .select('id, scheduled_at, status')
+      .eq('id', visit_id)
+      .eq('institution_id', institutionId)
+      .maybeSingle();
+
+    if (findErr || !visit) return '❌ Visita não encontrada ou sem permissão para reagendar.';
+    if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
+
+    const localTimeString = new_scheduled_at.substring(0, 19);
+    const newDateUtc = localTimeString + 'Z';
+
+    const { error } = await supabase
+      .from('visit_appointments')
+      .update({ scheduled_at: newDateUtc, status: 'scheduled' })
+      .eq('id', visit_id);
+
+    if (error) {
+      console.error('[Webhook] Erro ao reagendar visita:', error.message);
+      return '❌ Ocorreu um erro ao reagendar. Por favor, tente novamente.';
+    }
+
+    const [year, month, day, hour, min] = localTimeString.split(/[-T:]/);
+    return `✅ Visita reagendada com sucesso! Te esperamos no dia *${day}/${month}/${year} às ${hour}:${min}*. Qualquer dúvida, estou aqui! 😊`;
+  }
+
   if (toolName === 'register_enrollment') {
     const { student_name, student_email, student_phone, student_cpf, class_name, notes } = args;
 

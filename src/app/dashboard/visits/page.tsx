@@ -61,6 +61,12 @@ export default function VisitsPage() {
     action: () => {},
     type: 'primary'
   });
+
+  const [stackedModal, setStackedModal] = useState<{
+    show: boolean;
+    visits: Visit[];
+    label: string;
+  }>({ show: false, visits: [], label: '' });
   
   const [form, setForm] = useState({
     lead_name: '', lead_phone: '', scheduled_at: '', notes: '', lead_id: '',
@@ -404,10 +410,22 @@ export default function VisitsPage() {
                 <div key={i} className={`grid-cell month-cell ${isToday(day) ? 'active' : ''} ${isOtherMonth ? 'other-month' : ''}`} style={{ height: '120px' }}>
                   <span className="month-day-number">{day.getDate()}</span>
                   <div className="month-visit-indicators">
-                    {dayVisits.slice(0, 3).map(v => (
-                      <div key={v.id} className="visit-dot" style={{ backgroundColor: STATUS_MAP[v.status]?.color || 'var(--accent-primary)' }} />
-                    ))}
-                    {dayVisits.length > 3 && <span className="more-count">+{dayVisits.length - 3}</span>}
+                    {dayVisits.slice(0, 3).map(v => {
+                      const st = STATUS_MAP[v.status] || STATUS_MAP.scheduled;
+                      const StatusIcon = st.icon;
+                      return (
+                        <div
+                          key={v.id}
+                          className="month-visit-pill"
+                          style={{ backgroundColor: `${st.color}20`, borderColor: `${st.color}50`, color: st.color }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedVisit(v); }}
+                        >
+                          <StatusIcon size={8} />
+                          <span>{v.lead_name.split(' ')[0]}</span>
+                        </div>
+                      );
+                    })}
+                    {dayVisits.length > 3 && <span className="more-count">+{dayVisits.length - 3} mais</span>}
                   </div>
                   <div className="click-layer" onClick={() => { setCurrentDate(day); setView('day'); }} />
                 </div>
@@ -421,28 +439,68 @@ export default function VisitsPage() {
                 </div>
                 {displayDays.map((day, i) => {
                   const cellAppointments = getAppointmentsForCell(day, hour);
+                  const hasMultiple = cellAppointments.length > 1;
+                  const dateLabel = `${day.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} ${String(hour).padStart(2,'0')}:00`;
                   return (
                     <div key={`${i}-${hour}`} className="grid-cell">
-                      {cellAppointments.map(visit => {
-                        const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
-                        return (
-                          <div 
-                            key={visit.id} 
-                            className="appointment-card"
-                            onClick={(e) => { e.stopPropagation(); setSelectedVisit(visit); }}
-                            style={{ 
-                              backgroundColor: `${st.color}22`, 
-                              borderColor: st.color,
-                              color: st.color
-                            }}
-                          >
-                            <div className="appointment-time">
-                              {new Date(visit.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                            <div className="appointment-name">{visit.lead_name}</div>
+                      {hasMultiple ? (
+                        <div
+                          className="appointment-card appointment-stacked"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStackedModal({ show: true, visits: cellAppointments, label: dateLabel });
+                          }}
+                          style={{
+                            backgroundColor: 'rgba(99,102,241,0.15)',
+                            borderColor: '#6366f1',
+                            color: '#818cf8',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div className="appointment-stack-count">{cellAppointments.length}</div>
+                          <div className="appointment-name" style={{ fontWeight: 700 }}>
+                            {cellAppointments.length} agendamentos
                           </div>
-                        );
-                      })}
+                          <div className="appointment-stack-pills">
+                            {cellAppointments.slice(0, 3).map(v => {
+                              const st = STATUS_MAP[v.status] || STATUS_MAP.scheduled;
+                              return (
+                                <span
+                                  key={v.id}
+                                  className="status-dot"
+                                  style={{ backgroundColor: st.color }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        cellAppointments.map(visit => {
+                          const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
+                          const StatusIcon = st.icon;
+                          return (
+                            <div
+                              key={visit.id}
+                              className="appointment-card"
+                              onClick={(e) => { e.stopPropagation(); setSelectedVisit(visit); }}
+                              style={{
+                                backgroundColor: `${st.color}18`,
+                                borderColor: st.color,
+                                color: st.color
+                              }}
+                            >
+                              <div className="appointment-time">
+                                {new Date(visit.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              <div className="appointment-name">{visit.lead_name}</div>
+                              <div className="status-badge" style={{ backgroundColor: `${st.color}25`, color: st.color, borderColor: `${st.color}40` }}>
+                                <StatusIcon size={9} />
+                                <span>{st.label}</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   );
                 })}
@@ -767,6 +825,81 @@ export default function VisitsPage() {
                 )}
               </>
             ) : null}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal — Múltiplos Agendamentos no mesmo horário */}
+      {mounted && stackedModal.show && createPortal(
+        <div
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 99999, backdropFilter: 'blur(10px)', padding: '1rem'
+          }}
+          onClick={() => setStackedModal(s => ({ ...s, show: false }))}
+        >
+          <div
+            className="glass-panel animate-in"
+            style={{ padding: '2rem', width: '100%', maxWidth: '480px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>Agendamentos</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{stackedModal.label}</p>
+              </div>
+              <button onClick={() => setStackedModal(s => ({ ...s, show: false }))} style={{ color: 'var(--text-muted)' }}>
+                <XCircle size={22} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {stackedModal.visits.map(visit => {
+                const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
+                const StatusIcon = st.icon;
+                return (
+                  <button
+                    key={visit.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '1rem',
+                      padding: '1rem', borderRadius: '12px', textAlign: 'left',
+                      background: `${st.color}10`,
+                      border: `1px solid ${st.color}35`,
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      width: '100%'
+                    }}
+                    onClick={() => {
+                      setStackedModal(s => ({ ...s, show: false }));
+                      setSelectedVisit(visit);
+                    }}
+                  >
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                      background: `${st.color}20`, color: st.color,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <StatusIcon size={20} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                        {visit.lead_name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {new Date(visit.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700,
+                      background: `${st.color}20`, color: st.color, border: `1px solid ${st.color}40`,
+                      textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0
+                    }}>
+                      {st.label}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>,
         document.body

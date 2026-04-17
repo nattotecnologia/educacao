@@ -337,6 +337,77 @@
   white-space: nowrap;
 }
 
+/* Status badge inside appointment card */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 20px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Month view: colored pills instead of dots */
+.month-visit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 20px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border: 1px solid;
+  cursor: pointer;
+  z-index: 2;
+  position: relative;
+  transition: filter var(--transition-fast);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-visit-pill:hover {
+  filter: brightness(1.15);
+}
+
+/* Stacked appointments card (multiple in same slot) */
+.appointment-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.appointment-stack-count {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.appointment-stack-pills {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .calendar-header {
