@@ -757,8 +757,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
     }
 
-    const agent = defaultAgent || firstActiveAgent;
-
+    // O 'agent' já foi declarado acima na linha 706.
     if (!agent) {
       console.warn('[Webhook] Nenhum agente ativo encontrado.');
       return NextResponse.json({ success: true, reason: 'no_active_agent' });
