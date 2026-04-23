@@ -177,7 +177,10 @@ export async function fetchAvailableModels(provider: string, apiKey: string) {
       let category = 'premium';
       
       if (provider === 'openrouter') {
-        if (id.toLowerCase().includes(':free')) category = 'free';
+        const isFree = id.toLowerCase().includes(':free') || 
+                       id.toLowerCase().includes('-free') ||
+                       (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0');
+        if (isFree) category = 'free';
       } else if (provider === 'groq') {
         // No Groq, modelos como o Llama-3-8b costumam ser a base do tier gratuito
         if (id.toLowerCase().includes('8b') || id.toLowerCase().includes('versatile')) category = 'free';
