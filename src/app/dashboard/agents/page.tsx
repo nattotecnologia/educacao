@@ -6,7 +6,8 @@ import {
   Bot, Settings, Play, Pause, Plus, Activity, Cpu, Loader2, AlertCircle, BrainCircuit
 } from 'lucide-react';
 import { agentService } from '@/services';
-import { getInstitutionSettings, updateInstitutionSettings, updateTokenQuota } from '../settings/actions';
+import { getInstitutionSettings, updateInstitutionSettings, updateTokenQuota, fetchAvailableModels } from '../settings/actions';
+
 import styles from './Agents.module.css';
 import { useNotification } from '@/contexts/NotificationContext';
 
@@ -31,6 +32,9 @@ export default function AgentsPage() {
   const [tokenQuota, setTokenQuota] = useState(1000000);
   const [newQuota, setNewQuota] = useState('');
   const [savingQuota, setSavingQuota] = useState(false);
+  const [modelsList, setModelsList] = useState<any[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+
 
   const fetchData = async () => {
     try {
@@ -66,6 +70,31 @@ export default function AgentsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Busca modelos automaticamente quando o provedor ou a chave muda
+  useEffect(() => {
+    const key = aiSettings.ai_provider === 'openai' ? aiSettings.openai_key : 
+                aiSettings.ai_provider === 'groq' ? aiSettings.groq_key : 
+                aiSettings.openrouter_key;
+                
+    if (key && key.length > 10) {
+      const timer = setTimeout(async () => {
+        setLoadingModels(true);
+        try {
+          const models = await fetchAvailableModels(aiSettings.ai_provider, key);
+          setModelsList(models);
+        } catch (err) {
+          console.error('Falha ao listar modelos:', err);
+        } finally {
+          setLoadingModels(false);
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setModelsList([]);
+    }
+  }, [aiSettings.ai_provider, aiSettings.openai_key, aiSettings.groq_key, aiSettings.openrouter_key]);
+
 
   const handleSaveAi = async () => {
     setSavingAi(true);
@@ -233,14 +262,42 @@ export default function AgentsPage() {
             </div>
             <div>
               <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Modelo Padrão</label>
-              <input 
-                type="text"
-                value={aiSettings.ai_model}
-                onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
-                placeholder="Ex: gpt-4o-mini"
-                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
-              />
+              <div style={{ position: 'relative' }}>
+                <select 
+                  value={aiSettings.ai_model}
+                  onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
+                  style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', appearance: 'none' }}
+                  disabled={loadingModels}
+                >
+                  <option value="">{loadingModels ? 'Buscando modelos...' : 'Selecione um modelo'}</option>
+                  {modelsList.length > 0 ? (
+                    <>
+                      <optgroup label="✨ Modelos Gratuitos (Free)">
+                        {modelsList.filter(m => m.category === 'free').map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🚀 Modelos Premium / Pagos">
+                        {modelsList.filter(m => m.category === 'premium').map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    aiSettings.ai_model && <option value={aiSettings.ai_model}>{aiSettings.ai_model}</option>
+                  )}
+                </select>
+                {loadingModels && (
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <Loader2 size={14} className="animate-spin" />
+                  </div>
+                )}
+              </div>
+              <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                {modelsList.length > 0 ? `${modelsList.length} modelos encontrados.` : 'Insira a chave para listar os modelos.'}
+              </p>
             </div>
+
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--glass-border)' }}>
              <button onClick={() => setShowAiSettings(false)} style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Cancelar</button>

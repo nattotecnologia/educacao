@@ -144,3 +144,60 @@ export async function updatePlatformSettings(data: any) {
     throw error;
   }
 }
+
+export async function fetchAvailableModels(provider: string, apiKey: string) {
+  if (!apiKey || apiKey.length < 5) return [];
+  
+  try {
+    let baseURL = '';
+    if (provider === 'openai') baseURL = 'https://api.openai.com/v1';
+    else if (provider === 'groq') baseURL = 'https://api.groq.com/openai/v1';
+    else if (provider === 'openrouter') baseURL = 'https://openrouter.ai/api/v1';
+    else return [];
+
+    const response = await fetch(`${baseURL}/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Erro API: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const models = data.data || [];
+
+    // Formatar e categorizar
+    return models.map((m: any) => {
+      const id = m.id;
+      let category = 'premium';
+      
+      if (provider === 'openrouter') {
+        if (id.toLowerCase().includes(':free')) category = 'free';
+      } else if (provider === 'groq') {
+        // No Groq, modelos como o Llama-3-8b costumam ser a base do tier gratuito
+        if (id.toLowerCase().includes('8b') || id.toLowerCase().includes('versatile')) category = 'free';
+      } else if (provider === 'openai') {
+        // Na OpenAI, gpt-4o-mini é o mais econômico, mas tecnicamente não há "free"
+        if (id.includes('gpt-3.5') || id.includes('gpt-4o-mini')) category = 'free';
+      }
+
+      return {
+        id: id,
+        name: m.name || id,
+        category: category
+      };
+    }).sort((a: any, b: any) => {
+      // Ordena por categoria (free primeiro) e depois nome
+      if (a.category === b.category) return a.id.localeCompare(b.id);
+      return a.category === 'free' ? -1 : 1;
+    });
+  } catch (error) {
+    console.error('Erro ao buscar modelos:', error);
+    throw error;
+  }
+}
