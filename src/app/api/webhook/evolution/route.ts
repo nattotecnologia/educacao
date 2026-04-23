@@ -767,7 +767,7 @@ export async function POST(request: NextRequest) {
 
 
     // 8. Prepara Evolution API
-    const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
+    const evoUrl = (institution.evolution_api_url || process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
     const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : '';
     const evoKey =
       decryptedEvoKey ||
