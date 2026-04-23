@@ -757,7 +757,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
     }
 
-    console.log(`[Webhook] Agente: "${agent?.name}" | Papel: ${agent?.agent_role || 'custom'} | is_default: ${!!defaultAgent}`);
+    const agent = defaultAgent || firstActiveAgent;
+
+    if (!agent) {
+      console.warn('[Webhook] Nenhum agente ativo encontrado.');
+      return NextResponse.json({ success: true, reason: 'no_active_agent' });
+    }
+
+    console.log(`[Webhook] Agente: "${agent.name}" | Papel: ${agent.agent_role || 'custom'} | is_default: ${!!defaultAgent}`);
 
 
     // 8. Prepara Evolution API
