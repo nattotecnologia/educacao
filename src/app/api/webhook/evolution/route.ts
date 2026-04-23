@@ -683,43 +683,7 @@ export async function POST(request: NextRequest) {
     const pushName: string = payload.data.pushName || 'Lead WhatsApp';
     console.log(`[Webhook] Mensagem de ${pushName} | Número: ${phoneNumber} | Texto: "${incomingText}"`);
 
-    // 4. Busca ou cria o Lead
-    let { data: lead } = await supabaseAdmin
-      .from('leads')
-      .select('*')
-      .eq('phone', phoneNumber)
-      .eq('institution_id', institution.id)
-      .single();
-
-    const isNewLead = !lead;
-
-    if (!lead) {
-      const { data: newLead, error: leadError } = await supabaseAdmin
-        .from('leads')
-        .insert({ phone: phoneNumber, institution_id: institution.id, name: pushName, status: 'ai_handling' })
-        .select()
-        .single();
-      if (leadError) console.error('[Webhook] Erro ao registrar lead:', leadError.message);
-      lead = newLead;
-    }
-
-    if (!lead) return NextResponse.json({ error: 'Lead_Not_Created' }, { status: 500 });
-
-    // 5. Salva mensagem inbound
-    await supabaseAdmin.from('messages').insert({
-      lead_id: lead.id,
-      institution_id: institution.id,
-      direction: 'inbound',
-      content: incomingText,
-    });
-
-    // 6. Verifica atendimento humano
-    if (lead.status === 'human_handling') {
-      console.log(`[Webhook] Atendimento humano ativo para ${lead.name}. IA ignorando.`);
-      return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
-    }
-
-    // 7. Busca o Agente de IA
+    // 4. Busca o Agente de IA para associar ao lead se necessário
     const { data: defaultAgent } = await supabaseAdmin
       .from('ai_agents')
       .select('*')
@@ -741,11 +705,60 @@ export async function POST(request: NextRequest) {
 
     const agent = defaultAgent || firstActiveAgent;
 
-    if (!agent) {
-      console.warn('[Webhook] Nenhum agente ativo encontrado.');
-      return NextResponse.json({ success: true, reason: 'no_active_agent' });
+    // 5. Busca ou cria o Lead
+    let { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('*')
+      .eq('phone', phoneNumber)
+      .eq('institution_id', institution.id)
+      .single();
+
+    const isNewLead = !lead;
+
+    if (!lead) {
+      const { data: newLead, error: leadError } = await supabaseAdmin
+        .from('leads')
+        .insert({ 
+          phone: phoneNumber, 
+          institution_id: institution.id, 
+          name: pushName, 
+          status: 'ai_handling',
+          ai_agent_id: agent?.id 
+        })
+        .select()
+        .single();
+      if (leadError) console.error('[Webhook] Erro ao registrar lead:', leadError.message);
+      lead = newLead;
+    } else if (!lead.ai_agent_id && agent) {
+      // Se o lead já existe mas não tem agente associado, associa agora
+      const { data: updatedLead } = await supabaseAdmin
+        .from('leads')
+        .update({ ai_agent_id: agent.id })
+        .eq('id', lead.id)
+        .select()
+        .single();
+      if (updatedLead) lead = updatedLead;
     }
-    console.log(`[Webhook] Agente: "${agent.name}" | Papel: ${agent.agent_role || 'custom'} | is_default: ${!!defaultAgent}`);
+
+    if (!lead) return NextResponse.json({ error: 'Lead_Not_Created' }, { status: 500 });
+
+
+    // 5. Salva mensagem inbound
+    await supabaseAdmin.from('messages').insert({
+      lead_id: lead.id,
+      institution_id: institution.id,
+      direction: 'inbound',
+      content: incomingText,
+    });
+
+    // 6. Verifica atendimento humano
+    if (lead.status === 'human_handling') {
+      console.log(`[Webhook] Atendimento humano ativo para ${lead.name}. IA ignorando.`);
+      return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
+    }
+
+    console.log(`[Webhook] Agente: "${agent?.name}" | Papel: ${agent?.agent_role || 'custom'} | is_default: ${!!defaultAgent}`);
+
 
     // 8. Prepara Evolution API
     const evoUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
