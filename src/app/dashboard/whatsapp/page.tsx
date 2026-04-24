@@ -109,10 +109,17 @@ export default function WhatsAppPage() {
       if (qrData.base64) {
         setQrCode(qrData.base64);
         setConnectionStatus('connecting');
-      } else if (qrData.message?.includes('already connected') || qrData.instance?.state === 'open') {
+      } else if (
+        qrData.instance?.state === 'open' || 
+        qrData.state === 'open' ||
+        qrData.message?.toLowerCase().includes('already connected') ||
+        qrData.message?.toLowerCase().includes('already_connected')
+      ) {
         setConnectionStatus('open');
+        addNotification({ type: 'success', title: 'Conectado', message: 'O WhatsApp já está conectado!' });
       } else {
-        throw new Error('Não foi possível gerar o QR Code. Verifique se a instância já está aberta no celular.');
+        console.error('Dados do QR inesperados:', qrData);
+        throw new Error('Não foi possível gerar o QR Code. Se o seu WhatsApp já estiver aberto no PC/Web, feche-o e tente novamente.');
       }
 
     } catch (err: any) {
@@ -259,14 +266,43 @@ export default function WhatsAppPage() {
                   style={{ width: '100%', padding: '0.65rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.875rem' }}
                 />
               </div>
-              <button 
-                className="custom-button" 
-                onClick={handleSaveSettings}
-                disabled={savingSettings}
-                style={{ width: '100%', padding: '0.65rem', fontSize: '0.875rem' }}
-              >
-                {savingSettings ? <Loader2 className="animate-spin" size={16} /> : 'Salvar Configuração'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <button 
+                  className="custom-button" 
+                  onClick={handleSaveSettings}
+                  disabled={savingSettings}
+                  style={{ flex: 1, padding: '0.65rem', fontSize: '0.875rem' }}
+                >
+                  {savingSettings ? <Loader2 className="animate-spin" size={16} /> : 'Salvar'}
+                </button>
+                <button 
+                  className="custom-button secondary" 
+                  onClick={async () => {
+                    if (confirm('Deseja realmente desconectar esta instância do WhatsApp?')) {
+                      setGenerating(true);
+                      try {
+                        const instanceName = manualConfig?.instanceName || institution?.evolution_instance_name;
+                        await fetch('/api/evolution', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ instanceName, action: 'disconnect' }),
+                        });
+                        setConnectionStatus('none');
+                        setQrCode(null);
+                        addNotification({ type: 'success', title: 'Desconectado', message: 'Instância desconectada com sucesso.' });
+                      } catch (err: any) {
+                        addNotification({ type: 'error', title: 'Erro', message: 'Falha ao desconectar.' });
+                      } finally {
+                        setGenerating(false);
+                      }
+                    }
+                  }}
+                  disabled={generating}
+                  style={{ flex: 1, padding: '0.65rem', fontSize: '0.875rem', borderColor: 'rgba(255,0,0,0.3)', color: '#ff4444' }}
+                >
+                  Desconectar
+                </button>
+              </div>
             </div>
           </div>
         </aside>
