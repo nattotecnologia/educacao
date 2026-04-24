@@ -577,32 +577,39 @@ async function sendEvolutionMessage(
   delayMs: number
 ): Promise<void> {
   const baseDelay = Math.max(300, Math.min(delayMs, 5000));
+  
+  // Garante que o evoUrl nunca fique vazio e quebre o fetch
+  const validEvoUrl = evoUrl || process.env.EVOLUTION_API_URL || 'https://evo.nattotecnologia.cloud';
 
-  if (enableLineBreaks) {
-    const parts = text
-      .split('\n\n') // Split only on double newlines for separate bubbles
-      .map((p) => p.trim())
-      .filter(Boolean);
+  try {
+    if (enableLineBreaks) {
+      const parts = text
+        .split('\n\n') // Split only on double newlines for separate bubbles
+        .map((p) => p.trim())
+        .filter(Boolean);
 
-    console.log(`[Webhook] Quebra de linha ATIVA — ${parts.length} parte(s)`);
+      console.log(`[Webhook] Quebra de linha ATIVA — ${parts.length} parte(s)`);
 
-    for (let i = 0; i < parts.length; i++) {
-      await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
+      for (let i = 0; i < parts.length; i++) {
+        await fetch(`${validEvoUrl}/message/sendText/${instanceName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: evoKey },
+          body: JSON.stringify({ number: phoneNumber, text: parts[i], delay: i === 0 ? 1200 : baseDelay }),
+        });
+
+        if (i < parts.length - 1) {
+          await new Promise((r) => setTimeout(r, baseDelay));
+        }
+      }
+    } else {
+      await fetch(`${validEvoUrl}/message/sendText/${instanceName}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: evoKey },
-        body: JSON.stringify({ number: phoneNumber, text: parts[i], delay: i === 0 ? 1200 : baseDelay }),
+        body: JSON.stringify({ number: phoneNumber, text, delay: 1200 }),
       });
-
-      if (i < parts.length - 1) {
-        await new Promise((r) => setTimeout(r, baseDelay));
-      }
     }
-  } else {
-    await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: evoKey },
-      body: JSON.stringify({ number: phoneNumber, text, delay: 1200 }),
-    });
+  } catch (error) {
+    console.error('[Webhook] Erro ao enviar mensagem para a Evolution API:', error);
   }
 }
 

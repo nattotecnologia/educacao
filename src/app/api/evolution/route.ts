@@ -67,15 +67,23 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ success: true, manual: true, instanceName: ENV_INSTANCE_NAME });
       }
 
-      const data = await evoFetch('/instance/create', apiKey, {
-        method: 'POST',
-        body: JSON.stringify({
-          instanceName,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
-        }),
-      });
-      return NextResponse.json(data);
+      try {
+        const data = await evoFetch('/instance/create', apiKey, {
+          method: 'POST',
+          body: JSON.stringify({
+            instanceName,
+            qrcode: true,
+            integration: 'WHATSAPP-BAILEYS',
+          }),
+        });
+        return NextResponse.json({ ...data, instanceName });
+      } catch (evoErr: any) {
+        if (evoErr.message?.includes('already in use') || evoErr.message?.includes('403')) {
+          console.log(`Instância ${instanceName} já existe na Evolution API, ignorando erro de criação.`);
+          return NextResponse.json({ success: true, instanceName, message: 'Instance already exists' });
+        }
+        throw evoErr;
+      }
     }
 
     if (action === 'disconnect') {
