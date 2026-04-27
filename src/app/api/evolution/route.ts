@@ -53,9 +53,19 @@ export async function POST(req: NextRequest) {
     const { action } = body;
     
     const inst = await getInstitutionData();
-    const instKey = inst?.evolution_api_key ? decrypt(inst.evolution_api_key) : '';
+    let instKey = '';
+    if (inst?.evolution_api_key) {
+      try {
+        instKey = decrypt(inst.evolution_api_key);
+      } catch {
+        console.warn('[Evolution] Falha ao decriptar evolution_api_key do banco — usando GLOBAL_APIKEY do .env');
+      }
+    }
     const apiKey = instKey || INSTANCE_TOKEN || GLOBAL_KEY;
     const instanceName = body.instanceName || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
+
+    const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'null';
+    console.log(`[Evolution] POST action=${body.action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
 
     if (!EVO_URL || !apiKey) {
       return NextResponse.json({ error: 'Configurações da Evolution não encontradas' }, { status: 500 });
@@ -78,8 +88,10 @@ export async function POST(req: NextRequest) {
         });
         return NextResponse.json({ ...data, instanceName });
       } catch (evoErr: any) {
-        if (evoErr.message?.includes('already in use') || evoErr.message?.includes('403')) {
-          console.log(`Instância ${instanceName} já existe na Evolution API, ignorando erro de criação.`);
+        const errMsg = evoErr.message || '';
+        // 401, 403 e "already in use" = instância já existe e está ativa
+        if (errMsg.includes('already in use') || errMsg.includes('403') || errMsg.includes('401')) {
+          console.log(`[Evolution] Instância ${instanceName} já existe/conectada (${errMsg.includes('401') ? '401' : '403'}). Retornando sucesso.`);
           return NextResponse.json({ success: true, instanceName, message: 'Instance already exists' });
         }
         throw evoErr;
@@ -103,9 +115,19 @@ export async function GET(req: NextRequest) {
     const action = searchParams.get('action');
     
     const inst = await getInstitutionData();
-    const instKey = inst?.evolution_api_key ? decrypt(inst.evolution_api_key) : '';
+    let instKey = '';
+    if (inst?.evolution_api_key) {
+      try {
+        instKey = decrypt(inst.evolution_api_key);
+      } catch {
+        console.warn('[Evolution] Falha ao decriptar evolution_api_key do banco — usando GLOBAL_APIKEY do .env');
+      }
+    }
     const apiKey = instKey || INSTANCE_TOKEN || GLOBAL_KEY;
     const instanceName = searchParams.get('instance') || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
+
+    const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'null';
+    console.log(`[Evolution] GET action=${action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
 
     if (action === 'config') {
       return NextResponse.json({ 
