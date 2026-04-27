@@ -775,7 +775,7 @@ export async function POST(request: NextRequest) {
 
     // 8. Prepara Evolution API
     const evoUrl = (institution.evolution_api_url || process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
-    const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : '';
+    const decryptedEvoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : null;
     const evoKey =
       decryptedEvoKey ||
       process.env.EVOLUTION_GLOBAL_APIKEY ||
@@ -812,13 +812,13 @@ export async function POST(request: NextRequest) {
     let apiKey: string | undefined;
 
     if (provider === 'openai') {
-      apiKey = institution.openai_key ? decrypt(institution.openai_key) : process.env.OPENAI_API_KEY;
+      apiKey = (institution.openai_key ? decrypt(institution.openai_key) : null) || process.env.OPENAI_API_KEY;
     } else if (provider === 'groq') {
-      apiKey = institution.groq_key ? decrypt(institution.groq_key) : process.env.GROQ_API_KEY;
+      apiKey = (institution.groq_key ? decrypt(institution.groq_key) : null) || process.env.GROQ_API_KEY;
     } else if (provider === 'openrouter') {
-      apiKey = institution.openrouter_key ? decrypt(institution.openrouter_key) : process.env.OPENROUTER_API_KEY;
+      apiKey = (institution.openrouter_key ? decrypt(institution.openrouter_key) : null) || process.env.OPENROUTER_API_KEY;
     } else {
-      apiKey = institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined;
+      apiKey = (institution.ai_api_key ? decrypt(institution.ai_api_key) : null);
     }
 
     let baseURL: string | undefined = institution.ai_base_url || undefined;
