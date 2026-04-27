@@ -170,22 +170,22 @@ export async function fetchAvailableModels(provider: string, apiKey: string) {
 
     const data = await response.json();
     const models = data.data || [];
+    
+    console.log(`[Models] ${provider} retornou ${models.length} modelos.`);
 
     // Formatar e categorizar
-    return models.map((m: any) => {
+    const formattedModels = models.map((m: any) => {
       const id = m.id;
       let category = 'premium';
       
       if (provider === 'openrouter') {
         const isFree = id.toLowerCase().includes(':free') || 
                        id.toLowerCase().includes('-free') ||
-                       (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0');
+                       (m.pricing && (parseFloat(m.pricing.prompt) === 0 || m.pricing.prompt === '0'));
         if (isFree) category = 'free';
       } else if (provider === 'groq') {
-        // No Groq, modelos como o Llama-3-8b costumam ser a base do tier gratuito
-        if (id.toLowerCase().includes('8b') || id.toLowerCase().includes('versatile')) category = 'free';
+        if (id.toLowerCase().includes('8b') || id.toLowerCase().includes('versatile') || id.toLowerCase().includes('instant')) category = 'free';
       } else if (provider === 'openai') {
-        // Na OpenAI, gpt-4o-mini é o mais econômico, mas tecnicamente não há "free"
         if (id.includes('gpt-3.5') || id.includes('gpt-4o-mini')) category = 'free';
       }
 
@@ -194,8 +194,9 @@ export async function fetchAvailableModels(provider: string, apiKey: string) {
         name: m.name || id,
         category: category
       };
-    }).sort((a: any, b: any) => {
-      // Ordena por categoria (free primeiro) e depois nome
+    });
+
+    return formattedModels.sort((a: any, b: any) => {
       if (a.category === b.category) return a.id.localeCompare(b.id);
       return a.category === 'free' ? -1 : 1;
     });
