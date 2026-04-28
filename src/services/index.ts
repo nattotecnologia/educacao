@@ -114,30 +114,43 @@ export const leadService = {
   },
 
   async delete(id: string) {
+    // Apaga apenas o histórico de mensagens do lead
     const { error } = await supabase
-      .from('leads')
+      .from('messages')
       .delete()
-      .eq('id', id);
+      .eq('lead_id', id);
     if (error) throw error;
     return true;
   },
 
   async deleteMany(ids: string[]) {
+    // Apaga o histórico de mensagens de vários leads
     const { error } = await supabase
-      .from('leads')
+      .from('messages')
       .delete()
-      .in('id', ids);
+      .in('lead_id', ids);
     if (error) throw error;
     return true;
   },
 
   async deleteAll() {
     const profile = await authService.getProfile();
-    const { error } = await supabase
+    const instId = profile.institution_id;
+
+    // Busca os IDs dos leads da instituição para limpar apenas as mensagens deles
+    const { data: leads } = await supabase
       .from('leads')
-      .delete()
-      .eq('institution_id', profile.institution_id);
-    if (error) throw error;
+      .select('id')
+      .eq('institution_id', instId);
+    
+    if (leads && leads.length > 0) {
+      const ids = leads.map(l => l.id);
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .in('lead_id', ids);
+      if (error) throw error;
+    }
     return true;
   }
 };

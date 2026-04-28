@@ -220,11 +220,10 @@ export default function ChatPage() {
       async () => {
         try {
           await leadService.delete(selectedLead.id);
-          setSelectedLead(null);
-          setLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+          setMessages([]);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao excluir: ' + err.message);
+          alert('Erro ao limpar histórico: ' + err.message);
         }
       }
     );
@@ -232,18 +231,17 @@ export default function ChatPage() {
 
   const handleDeleteSelected = () => {
     openConfirmModal(
-      'Excluir Selecionados',
-      `Tem certeza que deseja excluir as ${selectedIds.size} conversas selecionadas?`,
+      'Limpar Históricos Selecionados',
+      `Tem certeza que deseja limpar o histórico de mensagens das ${selectedIds.size} conversas selecionadas? Os leads e seus agendamentos continuarão salvos.`,
       async () => {
         try {
           await leadService.deleteMany(Array.from(selectedIds));
-          setLeads(prev => prev.filter(l => !selectedIds.has(l.id)));
-          if (selectedLead && selectedIds.has(selectedLead.id)) setSelectedLead(null);
+          if (selectedLead && selectedIds.has(selectedLead.id)) setMessages([]);
           setSelectedIds(new Set());
           setIsSelectionMode(false);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao excluir selecionados: ' + err.message);
+          alert('Erro ao limpar selecionados: ' + err.message);
         }
       }
     );
@@ -251,19 +249,18 @@ export default function ChatPage() {
 
   const handleDeleteAll = () => {
     openConfirmModal(
-      'Limpar Todas as Conversas',
-      'ATENÇÃO: Isso excluirá permanentemente TODOS os leads e conversas do sistema. Esta ação não pode ser desfeita. Deseja continuar?',
+      'Limpar Todos os Históricos',
+      'Isso apagará permanentemente o histórico de mensagens de TODOS os leads. Os dados dos contatos e agendamentos serão preservados. Deseja continuar?',
       async () => {
         try {
           await leadService.deleteAll();
-          setLeads([]);
-          setSelectedLead(null);
+          setMessages([]);
           setSelectedIds(new Set());
           setIsSelectionMode(false);
           setIsMoreMenuOpen(false);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao excluir tudo: ' + err.message);
+          alert('Erro ao limpar tudo: ' + err.message);
         }
       }
     );
@@ -314,7 +311,7 @@ export default function ChatPage() {
                     <CheckSquare size={16} /> Selecionar conversas
                   </button>
                   <button className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`} onClick={handleDeleteAll}>
-                    <Trash2 size={16} /> Excluir todas
+                    <Trash2 size={16} /> Limpar todos os históricos
                   </button>
                 </div>
               )}
@@ -342,7 +339,7 @@ export default function ChatPage() {
               </button>
               {selectedIds.size > 0 && (
                 <button className={`${styles.bulkBtn} ${styles.deleteSelected}`} onClick={handleDeleteSelected}>
-                  Excluir
+                  Limpar Selecionados
                 </button>
               )}
             </div>
@@ -418,7 +415,7 @@ export default function ChatPage() {
                 >
                   {selectedLead.status === 'human_handling' ? <><Bot size={16} /> IA</> : <><UserCog size={16} /> Assumir</>}
                 </button>
-                <button className={styles.deleteSingleBtn} onClick={handleDeleteSingle}>
+                <button className={styles.deleteSingleBtn} onClick={handleDeleteSingle} title="Limpar Histórico">
                   <Trash2 size={20} />
                 </button>
               </div>
@@ -488,7 +485,7 @@ export default function ChatPage() {
                 Cancelar
               </button>
               <button className={`${styles.modalBtn} ${styles.confirmBtn}`} onClick={modalConfig.onConfirm}>
-                Confirmar Exclusão
+                Confirmar Limpeza
               </button>
             </div>
           </div>
