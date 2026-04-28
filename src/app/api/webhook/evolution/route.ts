@@ -812,13 +812,13 @@ export async function POST(request: NextRequest) {
     let apiKey: string | undefined;
 
     if (provider === 'openai') {
-      apiKey = (institution.openai_key ? decrypt(institution.openai_key) : null) || process.env.OPENAI_API_KEY;
+      apiKey = (institution.openai_key ? decrypt(institution.openai_key) : undefined) || process.env.OPENAI_API_KEY;
     } else if (provider === 'groq') {
-      apiKey = (institution.groq_key ? decrypt(institution.groq_key) : null) || process.env.GROQ_API_KEY;
+      apiKey = (institution.groq_key ? decrypt(institution.groq_key) : undefined) || process.env.GROQ_API_KEY;
     } else if (provider === 'openrouter') {
-      apiKey = (institution.openrouter_key ? decrypt(institution.openrouter_key) : null) || process.env.OPENROUTER_API_KEY;
+      apiKey = (institution.openrouter_key ? decrypt(institution.openrouter_key) : undefined) || process.env.OPENROUTER_API_KEY;
     } else {
-      apiKey = (institution.ai_api_key ? decrypt(institution.ai_api_key) : null);
+      apiKey = (institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined);
     }
 
     let baseURL: string | undefined = institution.ai_base_url || undefined;
