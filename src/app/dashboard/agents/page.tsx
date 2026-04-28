@@ -34,6 +34,7 @@ export default function AgentsPage() {
   const [savingQuota, setSavingQuota] = useState(false);
   const [modelsList, setModelsList] = useState<any[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [isManualModel, setIsManualModel] = useState(false);
 
 
   const fetchData = async () => {
@@ -261,32 +262,51 @@ export default function AgentsPage() {
               />
             </div>
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Modelo Padrão</label>
-              <div style={{ position: 'relative' }}>
-                <select 
-                  value={aiSettings.ai_model}
-                  onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
-                  style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', appearance: 'none' }}
-                  disabled={loadingModels}
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span>Modelo Padrão</span>
+                <button 
+                  type="button" 
+                  onClick={() => setIsManualModel(!isManualModel)}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '0.7rem', cursor: 'pointer', padding: 0 }}
                 >
-                  <option value="">{loadingModels ? 'Buscando modelos...' : 'Selecione um modelo'}</option>
-                  {modelsList.length > 0 ? (
-                    <>
-                      <optgroup label="✨ Modelos Gratuitos (Free)">
-                        {modelsList.filter(m => m.category === 'free').map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="🚀 Modelos Premium / Pagos">
-                        {modelsList.filter(m => m.category === 'premium').map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </optgroup>
-                    </>
-                  ) : (
-                    aiSettings.ai_model && <option value={aiSettings.ai_model}>{aiSettings.ai_model}</option>
-                  )}
-                </select>
+                  {isManualModel ? 'Selecionar da Lista' : 'Inserir Manualmente'}
+                </button>
+              </label>
+              <div style={{ position: 'relative' }}>
+                {isManualModel ? (
+                  <input
+                    type="text"
+                    value={aiSettings.ai_model}
+                    onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
+                    placeholder="Ex: openrouter/model-id"
+                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
+                  />
+                ) : (
+                  <select 
+                    value={aiSettings.ai_model}
+                    onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', appearance: 'none' }}
+                    disabled={loadingModels}
+                  >
+                    <option value="">{loadingModels ? 'Buscando modelos...' : 'Selecione um modelo'}</option>
+                    {modelsList.length > 0 ? (
+                      <>
+                        <optgroup label="✨ Modelos Gratuitos (Free)">
+                          {modelsList.filter(m => m.category === 'free').map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="🚀 Modelos Premium / Pagos">
+                          {modelsList.filter(m => m.category === 'premium').map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </optgroup>
+                      </>
+                    ) : (
+                      aiSettings.ai_model && <option value={aiSettings.ai_model}>{aiSettings.ai_model}</option>
+                    )}
+                  </select>
+                )}
                 {loadingModels && (
                   <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     <Loader2 size={14} className="animate-spin" />
