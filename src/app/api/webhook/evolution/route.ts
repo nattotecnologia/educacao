@@ -1099,7 +1099,18 @@ export async function POST(request: NextRequest) {
       }
     } catch (aiError: unknown) {
       const errMsg = aiError instanceof Error ? aiError.message : String(aiError);
-      console.error('[Webhook] Erro ao chamar IA:', errMsg);
+      console.error('[Webhook] ERRO NA CHAMADA DA IA:', errMsg);
+      
+      // LOG DE ERRO PARA O BANCO (Para eu conseguir ler daqui)
+      await supabaseAdmin.from('webhook_logs').insert({ 
+        payload: { 
+          error_type: 'AI_FAILURE', 
+          message: errMsg,
+          provider: provider,
+          model: model
+        } 
+      });
+
       botMessage =
         agent.fallback_message ||
         'Desculpe, estou com dificuldades no momento. Um atendente irá te ajudar em breve.';
