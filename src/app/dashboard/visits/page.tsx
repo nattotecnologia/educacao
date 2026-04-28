@@ -249,6 +249,39 @@ export default function VisitsPage() {
     })();
   }, [fetchVisits]);
 
+  // Realtime para Visitas
+  useEffect(() => {
+    let channel: any;
+
+    const setupRealtime = async () => {
+      const supabase = (await import('@/utils/supabase/client')).createClient();
+      
+      const channelId = `visits_realtime_${Math.random().toString(36).substring(7)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'visits' },
+          () => {
+            console.log('Visitas mudaram, recarregando agenda...');
+            fetchVisits();
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) {
+        import('@/utils/supabase/client').then(m => {
+          const supabase = m.createClient();
+          supabase.removeChannel(channel);
+        });
+      }
+    };
+  }, [fetchVisits]);
+
   const navigateDate = (amount: number) => {
     const next = new Date(currentDate);
     if (view === 'day') next.setDate(currentDate.getDate() + amount);

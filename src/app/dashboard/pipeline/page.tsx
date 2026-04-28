@@ -101,11 +101,52 @@ export default function PipelinePage() {
         await pipelineService.createStage(pipeline.id, stageName, stages.length, stageColor);
       }
       setIsModalOpen(false);
-      loadData();
+      // loadData() será chamado pelo realtime
     } catch (err) {
       console.error('Erro ao salvar estágio:', err);
     }
   };
+
+  // Realtime para Kanban
+  useEffect(() => {
+    let channel: any;
+
+    const setupRealtime = async () => {
+      const supabase = (await import('@/utils/supabase/client')).createClient();
+      
+      const channelId = `kanban_realtime_${Math.random().toString(36).substring(7)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'leads' },
+          () => {
+            console.log('Leads mudaram, recarregando Kanban...');
+            loadData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'pipeline_stages' },
+          () => {
+            console.log('Estágios mudaram, recarregando Kanban...');
+            loadData();
+          }
+        )
+        .subscribe();
+    };
+
+    if (pipeline) setupRealtime();
+
+    return () => {
+      if (channel) {
+        import('@/utils/supabase/client').then(m => {
+          const supabase = m.createClient();
+          supabase.removeChannel(channel);
+        });
+      }
+    };
+  }, [pipeline]);
 
   const handleDeleteStage = async (stageId: string) => {
     setActiveMenuId(null);

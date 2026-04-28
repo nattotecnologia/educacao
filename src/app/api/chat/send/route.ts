@@ -85,6 +85,12 @@ export async function POST(request: NextRequest) {
       console.error('Erro ao salvar mensagem no DB:', msgError);
     }
 
+    // Atualiza o updated_at do lead
+    await supabase
+      .from('leads')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', lead.id);
+
     return NextResponse.json({ success: true, message });
 
   } catch (error: any) {

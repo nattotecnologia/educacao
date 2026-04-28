@@ -628,14 +628,6 @@ export async function POST(request: NextRequest) {
 
   const bodyText = await request.text();
 
-  // LOG DE DEPURAÇÃO: Grava TUDO que chega para sabermos se a Evolution está chamando
-  try {
-    await supabaseAdmin.from('webhook_logs').insert({ payload: JSON.parse(bodyText) });
-  } catch (e) {
-    // Se falhar o parse, grava como texto puro se possível ou apenas loga erro
-    console.error('[Webhook Log] Falha ao gravar log bruto:', e);
-  }
-
   if (!verifyWebhookSignature(request, bodyText)) {
     console.error('[Webhook] Assinatura inválida.');
     return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
@@ -748,7 +740,7 @@ export async function POST(request: NextRequest) {
       // Se o lead já existe mas não tem agente associado, associa agora
       const { data: updatedLead } = await supabaseAdmin
         .from('leads')
-        .update({ ai_agent_id: agent.id })
+        .update({ ai_agent_id: agent.id, updated_at: new Date().toISOString() })
         .eq('id', lead.id)
         .select()
         .single();
@@ -1101,16 +1093,6 @@ export async function POST(request: NextRequest) {
       const errMsg = aiError instanceof Error ? aiError.message : String(aiError);
       console.error('[Webhook] ERRO NA CHAMADA DA IA:', errMsg);
       
-      // LOG DE ERRO PARA O BANCO (Para eu conseguir ler daqui)
-      await supabaseAdmin.from('webhook_logs').insert({ 
-        payload: { 
-          error_type: 'AI_FAILURE', 
-          message: errMsg,
-          provider: provider,
-          model: model
-        } 
-      });
-
       botMessage =
         agent.fallback_message ||
         'Desculpe, estou com dificuldades no momento. Um atendente irá te ajudar em breve.';
@@ -1147,6 +1129,12 @@ export async function POST(request: NextRequest) {
       agent.enable_line_breaks ?? false,
       agent.response_delay_ms ?? 800
     );
+
+    // 16. Atualiza o updated_at do lead para subir no chat
+    await supabaseAdmin
+      .from('leads')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', lead.id);
 
     console.log(`[Webhook] ✅ Mensagem enviada para ${phoneNumber}`);
     return NextResponse.json({ success: true, ai_handled: true });

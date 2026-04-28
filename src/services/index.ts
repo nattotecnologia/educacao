@@ -38,7 +38,7 @@ export const leadService = {
     status = '',
     page = 1,
     pageSize = 20,
-    orderBy = 'created_at',
+    orderBy = 'updated_at',
     orderDirection = 'desc'
   }: { 
     search?: string; 
@@ -118,6 +118,25 @@ export const leadService = {
       .from('leads')
       .delete()
       .eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteMany(ids: string[]) {
+    const { error } = await supabase
+      .from('leads')
+      .delete()
+      .in('id', ids);
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteAll() {
+    const profile = await authService.getProfile();
+    const { error } = await supabase
+      .from('leads')
+      .delete()
+      .eq('institution_id', profile.institution_id);
     if (error) throw error;
     return true;
   }
