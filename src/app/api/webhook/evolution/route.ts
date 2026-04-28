@@ -628,6 +628,14 @@ export async function POST(request: NextRequest) {
 
   const bodyText = await request.text();
 
+  // LOG DE DEPURAÇÃO: Grava TUDO que chega para sabermos se a Evolution está chamando
+  try {
+    await supabaseAdmin.from('webhook_logs').insert({ payload: JSON.parse(bodyText) });
+  } catch (e) {
+    // Se falhar o parse, grava como texto puro se possível ou apenas loga erro
+    console.error('[Webhook Log] Falha ao gravar log bruto:', e);
+  }
+
   if (!verifyWebhookSignature(request, bodyText)) {
     console.error('[Webhook] Assinatura inválida.');
     return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
