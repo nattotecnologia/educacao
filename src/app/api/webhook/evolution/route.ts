@@ -748,15 +748,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (!lead) return NextResponse.json({ error: 'Lead_Not_Created' }, { status: 500 });
+    console.log(`[Webhook] Lead: ${lead.name} (ID: ${lead.id})`);
 
-
-    // 5. Salva mensagem inbound
+    // 6. Salva a mensagem recebida IMEDIATAMENTE (para evitar perda em caso de timeout da IA)
     await supabaseAdmin.from('messages').insert({
       lead_id: lead.id,
       institution_id: institution.id,
       direction: 'inbound',
       content: incomingText,
     });
+    console.log(`[Webhook] Mensagem 'inbound' salva com sucesso.`);
 
     // 6. Verifica atendimento humano
     if (lead.status === 'human_handling') {
@@ -819,6 +820,11 @@ export async function POST(request: NextRequest) {
       apiKey = (institution.openrouter_key ? decrypt(institution.openrouter_key) : undefined) || process.env.OPENROUTER_API_KEY;
     } else {
       apiKey = (institution.ai_api_key ? decrypt(institution.ai_api_key) : undefined);
+    }
+    
+    if (!apiKey) {
+      console.error('[Webhook] API Key não encontrada para o provedor:', provider);
+      return NextResponse.json({ success: true, reason: 'no_api_key_for_provider' });
     }
 
     let baseURL: string | undefined = institution.ai_base_url || undefined;
