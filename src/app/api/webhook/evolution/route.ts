@@ -807,7 +807,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 10. Resolve API Key da IA
+    // 10. Resolve API Key da IA (Correção de tipagem para Vercel)
     const provider: string = institution.ai_provider || 'openai';
     let apiKey: string | undefined;
 
