@@ -1,23 +1,39 @@
-const OpenAI = require('openai');
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: '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'
-});
+const fs = require('fs');
 
-async function main() {
+function loadEnv() {
+  const envFile = fs.readFileSync('.env.local', 'utf8');
+  const env = {};
+  envFile.split('\n').forEach(line => {
+    const match = line.match(/^([^=]+)=(.*)$/);
+    if (match) env[match[1].trim()] = match[2].trim();
+  });
+  return env;
+}
+
+const env = loadEnv();
+const apiKey = env.OPENROUTER_API_KEY;
+
+async function testOpenRouter() {
+  console.log("Testing OpenRouter key...");
   try {
-    const systemPrompt = "A".repeat(1500); // simulate 500+ tokens
-    const aiResponse = await openai.chat.completions.create({
-      model: 'openai/gpt-4o', 
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Olá, tudo bem?' }
-      ],
-      max_tokens: 800
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.0-flash-001",
+        messages: [{ role: "user", content: "oi" }]
+      })
     });
-    console.log('AI Response:', aiResponse.choices[0].message.content);
+    
+    const data = await response.json();
+    console.log("Response status:", response.status);
+    console.log("Response data:", JSON.stringify(data, null, 2));
   } catch (error) {
-    console.error('AI Error:', error.message);
+    console.error("Fetch error:", error);
   }
 }
-main();
+
+testOpenRouter();
