@@ -24,9 +24,23 @@ interface Visit {
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
   scheduled: { label: 'Agendada', color: 'var(--accent-primary)', icon: Clock },
   confirmed: { label: 'Confirmada', color: '#10b981', icon: CheckCircle },
-  done: { label: 'Realizada', color: '#6366f1', icon: CheckCircle },
+  done: { label: 'Finalizada', color: '#8b5cf6', icon: CheckCircle },
   cancelled: { label: 'Cancelada', color: '#ef4444', icon: XCircle },
   no_show: { label: 'Não compareceu', color: '#94a3b8', icon: AlertCircle },
+};
+
+/**
+ * Returns the effective status considering if the appointment has already passed.
+ * Scheduled/Confirmed visits past their scheduled time are treated as 'done'.
+ */
+const getEffectiveStatus = (visit: Visit): string => {
+  if (visit.status === 'cancelled' || visit.status === 'done' || visit.status === 'no_show') {
+    return visit.status;
+  }
+  const scheduledAt = new Date(visit.scheduled_at);
+  const now = new Date();
+  if (scheduledAt < now) return 'done';
+  return visit.status;
 };
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 08:00 to 20:00
@@ -226,6 +240,31 @@ export default function VisitsPage() {
 
       if (!res.ok) throw new Error('Falha ao excluir');
       
+      setSelectedVisit(null);
+      setConfirmModal(prev => ({ ...prev, show: false }));
+      fetchVisits();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!selectedVisit) return;
+
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/visits/${selectedVisit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao cancelar');
+
       setSelectedVisit(null);
       setConfirmModal(prev => ({ ...prev, show: false }));
       fetchVisits();
@@ -444,7 +483,8 @@ export default function VisitsPage() {
                   <span className="month-day-number">{day.getDate()}</span>
                   <div className="month-visit-indicators">
                     {dayVisits.slice(0, 3).map(v => {
-                      const st = STATUS_MAP[v.status] || STATUS_MAP.scheduled;
+                      const effectiveStatus = getEffectiveStatus(v);
+                      const st = STATUS_MAP[effectiveStatus] || STATUS_MAP.scheduled;
                       const StatusIcon = st.icon;
                       return (
                         <div
@@ -509,7 +549,8 @@ export default function VisitsPage() {
                         </div>
                       ) : (
                         cellAppointments.map(visit => {
-                          const st = STATUS_MAP[visit.status] || STATUS_MAP.scheduled;
+                          const effectiveStatus = getEffectiveStatus(visit);
+                          const st = STATUS_MAP[effectiveStatus] || STATUS_MAP.scheduled;
                           const StatusIcon = st.icon;
                           return (
                             <div
@@ -821,10 +862,11 @@ export default function VisitsPage() {
                        )}
                     </div>
     
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2.5rem', flexWrap: 'wrap' }}>
+                       {/* Editar — disponível para qualquer status */}
                        <button 
                         className="agendar-btn" 
-                        style={{ flex: 1, justifyContent: 'center' }} 
+                        style={{ flex: 2, justifyContent: 'center', minWidth: '120px' }} 
                         onClick={() => {
                           const dt = new Date(selectedVisit.scheduled_at);
                           setEditForm({
@@ -839,13 +881,33 @@ export default function VisitsPage() {
                        >
                          Editar Visita
                        </button>
+
+                       {/* Cancelar — apenas se não estiver já cancelado ou finalizado */}
+                       {selectedVisit.status !== 'cancelled' && selectedVisit.status !== 'done' && (
+                         <button 
+                          style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(245,158,11,0.35)', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', fontWeight: 600, minWidth: '100px', cursor: 'pointer' }}
+                          onClick={() => {
+                            setConfirmModal({
+                              show: true,
+                              title: 'Cancelar Agendamento',
+                              message: `Deseja cancelar a visita de ${selectedVisit.lead_name}? O registro será mantido como cancelado.`,
+                              type: 'danger',
+                              action: handleCancel
+                            });
+                          }}
+                         >
+                           Cancelar
+                         </button>
+                       )}
+
+                       {/* Excluir permanentemente */}
                        <button 
-                        style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
+                        style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', background: 'rgba(239,68,68,0.1)', cursor: 'pointer' }}
                         onClick={() => {
                           setConfirmModal({
                             show: true,
                             title: 'Excluir Agendamento',
-                            message: 'Tem certeza que deseja remover esta visita? Esta ação não pode ser desfeita.',
+                            message: 'Tem certeza que deseja remover esta visita permanentemente? Esta ação não pode ser desfeita.',
                             type: 'danger',
                             action: handleDelete
                           });

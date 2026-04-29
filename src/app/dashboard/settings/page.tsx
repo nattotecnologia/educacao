@@ -2,24 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Globe, ShieldCheck, BrainCircuit, Loader2, Save, 
-  Palette, Upload, Moon, Sun, Smartphone, ExternalLink 
+  Globe, Loader2, Save, 
+  Palette, Upload, Moon, Sun 
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNotification } from '@/contexts/NotificationContext';
 import styles from './Settings.module.css';
 import { createClient } from '@/utils/supabase/client';
 import { getInstitutionSettings, updateInstitutionSettings, getPlatformSettings, updatePlatformSettings } from './actions';
-import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
   const { addNotification } = useNotification();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'geral' | 'whatsapp' | 'ai' | 'whitelabel'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'whitelabel'>('geral');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -122,12 +120,6 @@ export default function SettingsPage() {
       <nav className={styles.sidebarNav}>
         <button type="button" onClick={() => setActiveTab('geral')} className={`${styles.navButton} ${activeTab === 'geral' ? styles.navButtonActive : ''}`}>
           <Globe size={18} /> Instituição
-        </button>
-        <button type="button" onClick={() => setActiveTab('whatsapp')} className={`${styles.navButton} ${activeTab === 'whatsapp' ? styles.navButtonActive : ''}`}>
-          <ShieldCheck size={18} /> WhatsApp
-        </button>
-        <button type="button" onClick={() => setActiveTab('ai')} className={`${styles.navButton} ${activeTab === 'ai' ? styles.navButtonActive : ''}`}>
-          <BrainCircuit size={18} /> Inteligência
         </button>
         <button type="button" onClick={() => setActiveTab('whitelabel')} className={`${styles.navButton} ${activeTab === 'whitelabel' ? styles.navButtonActive : ''}`}>
           <Palette size={18} /> Personalização
@@ -252,37 +244,6 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {activeTab === 'whatsapp' && (
-          <section className={styles.section}>
-            <header className={styles.sectionHeader}>
-              <h2>Conexão WhatsApp</h2>
-              <p>As configurações técnicas de conexão e o pareamento de aparelhos foram movidos para o módulo dedicado.</p>
-            </header>
-            <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.1)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <Smartphone size={48} style={{ margin: '0 auto 1rem', color: 'var(--accent-primary)' }} />
-              <p style={{ marginBottom: '1.5rem' }}>Gerencie instâncias, tokens e QR Code diretamente na página de WhatsApp.</p>
-              <button type="button" onClick={() => router.push('/dashboard/whatsapp')} className="custom-button">
-                <ExternalLink size={18} /> Ir para Conexão WhatsApp
-              </button>
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'ai' && (
-          <section className={styles.section}>
-            <header className={styles.sectionHeader}>
-              <h2>Inteligência Artificial</h2>
-              <p>As chaves de API globais e a configuração de provedores (OpenAI, Groq, etc.) agora são gerenciadas junto aos Agentes.</p>
-            </header>
-            <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.1)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <BrainCircuit size={48} style={{ margin: '0 auto 1rem', color: 'var(--accent-secondary)' }} />
-              <p style={{ marginBottom: '1.5rem' }}>Configure os modelos e credenciais globais diretamente no painel de agentes.</p>
-              <button type="button" onClick={() => router.push('/dashboard/agents')} className="custom-button">
-                <ExternalLink size={18} /> Ir para Agentes de IA
-              </button>
-            </div>
-          </section>
-        )}
       </div>
       
       <div className={styles.submitBar}>
