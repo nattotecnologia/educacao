@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { 
   Users, Search, Filter, MoreHorizontal, UserPlus, MessageCircle,
   Phone, Clock, Loader2, Bot, X, ChevronLeft, ChevronRight, CheckCircle2,
-  Trash2, Edit2, ArrowUpDown, ArrowUp, ArrowDown
+  Trash2, Edit2, ArrowUpDown, ArrowUp, ArrowDown, Calendar, FileText
 } from 'lucide-react';
-import { leadService } from '@/services';
+import { leadService, visitService } from '@/services';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useNotification } from '@/contexts/NotificationContext';
 import { maskPhone } from '@/utils/masks';
@@ -56,6 +56,8 @@ export default function LeadsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [leadVisits, setLeadVisits] = useState<any[]>([]);
+  const [loadingVisits, setLoadingVisits] = useState(false);
 
   const { addNotification } = useNotification();
   const [confirmConfig, setConfirmConfig] = useState({
@@ -105,6 +107,18 @@ export default function LeadsPage() {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  useEffect(() => {
+    if (selectedLead?.id) {
+      setLoadingVisits(true);
+      visitService.getByLeadId(selectedLead.id)
+        .then(setLeadVisits)
+        .catch(err => console.error('Erro ao buscar visitas:', err))
+        .finally(() => setLoadingVisits(false));
+    } else {
+      setLeadVisits([]);
+    }
+  }, [selectedLead?.id]);
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     setUpdatingId(leadId);
@@ -421,6 +435,56 @@ export default function LeadsPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Seção de Agendamentos */}
+              <div className={styles.visitsSection}>
+                <h4 className={styles.sectionTitle}>
+                  <Calendar size={16} /> Agendamentos de Visita
+                </h4>
+                
+                {loadingVisits ? (
+                  <div className={styles.visitsLoading}>
+                    <Loader2 size={20} className="animate-spin" />
+                    <span>Buscando agendamentos...</span>
+                  </div>
+                ) : leadVisits.length === 0 ? (
+                  <p className={styles.noVisits}>Nenhum agendamento encontrado para este lead.</p>
+                ) : (
+                  <div className={styles.visitsList}>
+                    {leadVisits.map(visit => {
+                      const date = new Date(visit.scheduled_at).toLocaleString('pt-BR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                      });
+                      
+                      const visitStatusMap: any = {
+                        scheduled: { label: 'Agendada', color: '#3b82f6' },
+                        confirmed: { label: 'Confirmada', color: '#10b981' },
+                        done: { label: 'Finalizada', color: '#8b5cf6' },
+                        cancelled: { label: 'Cancelada', color: '#ef4444' },
+                        no_show: { label: 'Faltou', color: '#94a3b8' }
+                      };
+                      const st = visitStatusMap[visit.status] || { label: visit.status, color: '#94a3b8' };
+
+                      return (
+                        <div key={visit.id} className={styles.visitItem}>
+                          <div className={styles.visitHeader}>
+                            <span className={styles.visitDate}>{date}</span>
+                            <span className={styles.visitStatus} style={{ color: st.color, borderColor: st.color }}>
+                              {st.label}
+                            </span>
+                          </div>
+                          {visit.notes && (
+                            <div className={styles.visitNotes}>
+                              <FileText size={12} />
+                              <span>{visit.notes}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

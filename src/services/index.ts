@@ -369,4 +369,17 @@ export const pipelineService = {
   }
 };
 
+export const visitService = {
+  async getByLeadId(leadId: string) {
+    const { data, error } = await supabase
+      .from('visit_appointments')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('scheduled_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  }
+};
+
 

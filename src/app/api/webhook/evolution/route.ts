@@ -159,6 +159,7 @@ function buildSystemPrompt(
     '',
     '⚠️ GERENCIAMENTO DE VISITAS EXISTENTES',
     '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
+    '- Ao listar as visitas para o lead, seja cordial e mostre as datas de forma amigável.',
     '- Se o lead quiser cancelar uma visita, PRIMEIRO use `list_visits` para identificar o ID e DEPOIS use `cancel_visit`.',
     '- Se o lead quiser reagendar, PRIMEIRO use `list_visits` para identificar o ID, confirme o novo horário e DEPOIS use `reschedule_visit`.',
     '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar.',
@@ -280,7 +281,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'list_visits',
       description:
-        'Lista as visitas agendadas do lead atual. Use quando o lead perguntar sobre seus agendamentos, quiser ver quando tem visita marcada, ou antes de cancelar/reagendar para identificar qual visita alterar.',
+        'Busca e lista todas as visitas agendadas (ativas ou passadas) associadas ao lead. Use sempre que o lead perguntar "quais meus agendamentos", "quando é minha visita", ou demonstrar dúvida sobre o horário marcado.',
       parameters: {
         type: 'object',
         properties: {
