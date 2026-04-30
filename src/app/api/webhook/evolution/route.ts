@@ -350,7 +350,17 @@ async function executeTool(
     if (!leadId) return '❌ Não consegui identificar seu cadastro para buscar os agendamentos.';
 
     const includePast = args.include_past === true || args.include_past === 'true';
-    const nowIso = new Date().toISOString();
+
+    // Os agendamentos estão salvos com a hora local + Z (ex: 14:00 local vira 14:00Z)
+    // Precisamos comparar com o "agora" também na hora local + Z para não ocultar
+    // agendamentos devido à diferença de fuso horário.
+    const nowSp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const nowLocalIso = nowSp.getFullYear() + '-' + 
+      String(nowSp.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(nowSp.getDate()).padStart(2, '0') + 'T' + 
+      String(nowSp.getHours()).padStart(2, '0') + ':' + 
+      String(nowSp.getMinutes()).padStart(2, '0') + ':' + 
+      String(nowSp.getSeconds()).padStart(2, '0') + 'Z';
 
     let query = supabase
       .from('visit_appointments')
@@ -361,7 +371,7 @@ async function executeTool(
       .limit(10);
 
     if (!includePast) {
-      query = query.gte('scheduled_at', nowIso);
+      query = query.gte('scheduled_at', nowLocalIso);
     }
 
     const { data: visits, error } = await query;
@@ -399,10 +409,10 @@ async function executeTool(
     const { visit_id } = args;
     if (!visit_id) return '❌ Preciso do ID da visita para cancelar.';
 
-    // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
+    // Busca a visita (suporta ID completo ou prefixo parcial)
     let visitToCancel = null;
 
-    if (visit_id.length === 8) {
+    if (visit_id.length !== 36) {
       if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
       const { data: leadVisits, error: leadErr } = await supabase
         .from('visit_appointments')
@@ -454,10 +464,10 @@ async function executeTool(
     const { visit_id, new_scheduled_at } = args;
     if (!visit_id || !new_scheduled_at) return '❌ Preciso do ID da visita e do novo horário para reagendar.';
 
-    // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
+    // Busca a visita (suporta ID completo ou prefixo parcial)
     let visitToReschedule = null;
 
-    if (visit_id.length === 8) {
+    if (visit_id.length !== 36) {
       if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
       const { data: leadVisits, error: leadErr } = await supabase
         .from('visit_appointments')

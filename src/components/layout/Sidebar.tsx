@@ -49,6 +49,7 @@ export default function Sidebar() {
     { name: 'Leads (Em Massa)', icon: Users, path: '/dashboard/leads', group: 'crm' },
     { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat', group: 'crm' },
     { name: 'Cursos', icon: BookOpen, path: '/dashboard/courses', group: 'academic' },
+    { name: 'Turmas', icon: Users, path: '/dashboard/classes', group: 'academic' },
     { name: 'Matrículas', icon: GraduationCap, path: '/dashboard/enrollments', group: 'academic' },
     { name: 'Agendamentos', icon: CalendarDays, path: '/dashboard/visits', group: 'academic' },
     { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents', group: 'automation' },
