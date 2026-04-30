@@ -400,26 +400,38 @@ async function executeTool(
     if (!visit_id) return '❌ Preciso do ID da visita para cancelar.';
 
     // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
-    let query = supabase
-      .from('visit_appointments')
-      .select('id, scheduled_at, status')
-      .eq('institution_id', institutionId);
+    let visitToCancel = null;
 
     if (visit_id.length === 8) {
-      query = query.ilike('id', `${visit_id}%`);
+      if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
+      const { data: leadVisits, error: leadErr } = await supabase
+        .from('visit_appointments')
+        .select('id, scheduled_at, status')
+        .eq('institution_id', institutionId)
+        .eq('lead_id', leadId);
+        
+      if (!leadErr && leadVisits) {
+        const matched = leadVisits.filter(v => v.id.startsWith(visit_id));
+        if (matched.length === 0) return '❌ Visita não encontrada ou sem permissão para cancelar.';
+        if (matched.length > 1) return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, seja mais específico ou use a data.';
+        visitToCancel = matched[0];
+      } else {
+        return '❌ Ocorreu um erro ao buscar suas visitas.';
+      }
     } else {
-      query = query.eq('id', visit_id);
+      const { data: visits, error: findErr } = await supabase
+        .from('visit_appointments')
+        .select('id, scheduled_at, status')
+        .eq('institution_id', institutionId)
+        .eq('id', visit_id);
+        
+      if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para cancelar.';
+      visitToCancel = visits[0];
     }
 
-    const { data: visits, error: findErr } = await query;
+    if (!visitToCancel) return '❌ Visita não encontrada ou sem permissão para cancelar.';
 
-    if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para cancelar.';
-    
-    if (visits.length > 1) {
-      return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, seja mais específico ou use a data.';
-    }
-
-    const visit = visits[0];
+    const visit = visitToCancel;
     if (visit.status === 'cancelled') return 'ℹ️ Esta visita já estava cancelada.';
     if (visit.status === 'done') return '❌ Não é possível cancelar uma visita que já foi realizada.';
 
@@ -443,26 +455,38 @@ async function executeTool(
     if (!visit_id || !new_scheduled_at) return '❌ Preciso do ID da visita e do novo horário para reagendar.';
 
     // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
-    let query = supabase
-      .from('visit_appointments')
-      .select('id, scheduled_at, status')
-      .eq('institution_id', institutionId);
+    let visitToReschedule = null;
 
     if (visit_id.length === 8) {
-      query = query.ilike('id', `${visit_id}%`);
+      if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
+      const { data: leadVisits, error: leadErr } = await supabase
+        .from('visit_appointments')
+        .select('id, scheduled_at, status')
+        .eq('institution_id', institutionId)
+        .eq('lead_id', leadId);
+        
+      if (!leadErr && leadVisits) {
+        const matched = leadVisits.filter(v => v.id.startsWith(visit_id));
+        if (matched.length === 0) return '❌ Visita não encontrada ou sem permissão para reagendar.';
+        if (matched.length > 1) return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, use a data.';
+        visitToReschedule = matched[0];
+      } else {
+        return '❌ Ocorreu um erro ao buscar suas visitas.';
+      }
     } else {
-      query = query.eq('id', visit_id);
+      const { data: visits, error: findErr } = await supabase
+        .from('visit_appointments')
+        .select('id, scheduled_at, status')
+        .eq('institution_id', institutionId)
+        .eq('id', visit_id);
+        
+      if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para reagendar.';
+      visitToReschedule = visits[0];
     }
 
-    const { data: visits, error: findErr } = await query;
+    if (!visitToReschedule) return '❌ Visita não encontrada ou sem permissão para reagendar.';
 
-    if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para reagendar.';
-    
-    if (visits.length > 1) {
-      return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, use o ID completo ou a data.';
-    }
-
-    const visit = visits[0];
+    const visit = visitToReschedule;
     if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
     if (visit.status === 'done') return '❌ Não é possível reagendar uma visita que já foi realizada.';
 
