@@ -163,9 +163,10 @@ function buildSystemPrompt(
     '- Se o lead quiser cancelar ou reagendar, você DEVE sempre usar `list_visits` primeiro para obter o ID da visita, a menos que o ID já tenha sido mencionado explicitamente na conversa.',
     '- Use o ID curto (8 caracteres) fornecido por `list_visits` para identificar a visita.',
     '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar e pedir autorização final.',
+    '- IMPORTANTE: Ao pedir confirmação, mencione sempre o ID curto da visita (ex: "para a visita de ID abc12345"). Isso garante que você não perca a referência no próximo turno.',
     '',
     '⚠️ REGRA DE OURO: CONFIRMAÇÃO OBRIGATÓRIA (MANDATÓRIA)',
-    '- Antes de executar QUALQUER ferramenta de escrita (register_visit, register_enrollment, cancel_visit, reschedule_visit), você DEVE resumir os dados para o usuário e perguntar: "Está correto? Posso prosseguir?".',
+    '- Antes de executar QUALQUER ferramenta de escrita (register_visit, register_enrollment, cancel_visit, reschedule_visit), você DEVE resumir os dados para o usuário (incluindo o ID da visita se for cancelamento/reagendamento) e perguntar: "Está correto? Posso prosseguir?".',
     '- Só execute a ferramenta se o usuário responder afirmativamente (ex: "Sim", "Pode", "Tudo certo").',
     '',
     '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
@@ -417,7 +418,7 @@ async function executeTool(
     let visitToCancel = null;
 
     if (visit_id.length !== 36) {
-      if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
+      if (!leadId) return '❌ Erro interno: Lead não identificado para busca parcial.';
       const { data: leadVisits, error: leadErr } = await supabase
         .from('visit_appointments')
         .select('id, scheduled_at, status')
@@ -425,12 +426,13 @@ async function executeTool(
         .eq('lead_id', leadId);
         
       if (!leadErr && leadVisits) {
-        const matched = leadVisits.filter(v => v.id.startsWith(visit_id));
-        if (matched.length === 0) return '❌ Visita não encontrada ou sem permissão para cancelar.';
-        if (matched.length > 1) return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, seja mais específico ou use a data.';
+        const targetId = visit_id.trim().toLowerCase();
+        const matched = leadVisits.filter(v => v.id.toLowerCase().startsWith(targetId));
+        if (matched.length === 0) return `❌ Não encontrei nenhuma visita do seu cadastro que comece com o ID "${visit_id}". Por favor, verifique se o ID está correto.`;
+        if (matched.length > 1) return `⚠️ Encontrei ${matched.length} visitas com IDs similares. Por favor, use o ID completo ou informe a data exata.`;
         visitToCancel = matched[0];
       } else {
-        return '❌ Ocorreu um erro ao buscar suas visitas.';
+        return `❌ Erro ao acessar seus agendamentos: ${leadErr?.message || 'Erro desconhecido'}`;
       }
     } else {
       const { data: visits, error: findErr } = await supabase
@@ -472,7 +474,7 @@ async function executeTool(
     let visitToReschedule = null;
 
     if (visit_id.length !== 36) {
-      if (!leadId) return '❌ Não consegui identificar seu cadastro para encontrar a visita.';
+      if (!leadId) return '❌ Erro interno: Lead não identificado para busca parcial.';
       const { data: leadVisits, error: leadErr } = await supabase
         .from('visit_appointments')
         .select('id, scheduled_at, status')
@@ -480,12 +482,13 @@ async function executeTool(
         .eq('lead_id', leadId);
         
       if (!leadErr && leadVisits) {
-        const matched = leadVisits.filter(v => v.id.startsWith(visit_id));
-        if (matched.length === 0) return '❌ Visita não encontrada ou sem permissão para reagendar.';
-        if (matched.length > 1) return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, use a data.';
+        const targetId = visit_id.trim().toLowerCase();
+        const matched = leadVisits.filter(v => v.id.toLowerCase().startsWith(targetId));
+        if (matched.length === 0) return `❌ Não encontrei nenhuma visita do seu cadastro que comece com o ID "${visit_id}". Por favor, verifique se o ID está correto.`;
+        if (matched.length > 1) return `⚠️ Encontrei ${matched.length} visitas com IDs similares. Por favor, use o ID completo ou informe a data exata.`;
         visitToReschedule = matched[0];
       } else {
-        return '❌ Ocorreu um erro ao buscar suas visitas.';
+        return `❌ Erro ao acessar seus agendamentos: ${leadErr?.message || 'Erro desconhecido'}`;
       }
     } else {
       const { data: visits, error: findErr } = await supabase
