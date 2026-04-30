@@ -60,7 +60,7 @@ export default function Autocomplete({
       alignItems: 'center',
       gap: '0.75rem',
       padding: '0.75rem 1rem',
-      background: 'rgba(0, 0, 0, 0.25)',
+      background: 'var(--glass-bg)',
       border: '1px solid var(--glass-border)',
       borderRadius: '12px',
       cursor: disabled ? 'not-allowed' : 'pointer',
@@ -69,6 +69,7 @@ export default function Autocomplete({
       outline: 'none',
       width: '100%',
       textAlign: 'left' as const,
+      backdropFilter: 'blur(10px)',
     },
     valueText: {
       flex: 1,
@@ -84,36 +85,37 @@ export default function Autocomplete({
       top: 'calc(100% + 8px)',
       left: 0,
       right: 0,
-      background: '#1a1a1a',
+      background: 'var(--bg-secondary)',
       backdropFilter: 'blur(20px)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
+      border: '1px solid var(--glass-border)',
       borderRadius: '16px',
-      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--glass-border)',
       padding: '0.75rem',
       zIndex: 1000,
       animation: 'dropdownIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
     },
     searchWrapper: {
       position: 'relative' as const,
-      marginBottom: '1rem',
+      marginBottom: '0.75rem',
     },
     searchInput: {
       width: '100%',
       padding: '0.75rem 1rem 0.75rem 2.5rem',
-      background: 'rgba(255, 255, 255, 0.05)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      borderRadius: '12px',
-      color: '#ffffff',
+      background: 'var(--bg-tertiary)',
+      border: '1px solid var(--glass-border)',
+      borderRadius: '10px',
+      color: 'var(--text-primary)',
       fontSize: '0.875rem',
       outline: 'none',
       boxSizing: 'border-box' as const,
+      transition: 'border-color 0.2s',
     },
     optionsList: {
       maxHeight: '320px',
       overflowY: 'auto' as const,
       display: 'flex',
       flexDirection: 'column' as const,
-      gap: '0.35rem',
+      gap: '0.25rem',
       paddingRight: '4px',
     },
     categoryHeader: {
@@ -126,28 +128,29 @@ export default function Autocomplete({
       display: 'flex',
       alignItems: 'center',
       gap: '0.5rem',
+      opacity: 0.8,
     },
     option: (isActive: boolean) => ({
       width: '100%',
       padding: '0.75rem 1rem',
-      borderRadius: '12px',
+      borderRadius: '10px',
       textAlign: 'left' as const,
-      background: isActive ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+      background: isActive ? 'color-mix(in srgb, var(--accent-primary) 15%, transparent)' : 'transparent',
       border: 'none',
       cursor: 'pointer',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.15s ease',
       display: 'flex',
       flexDirection: 'column' as const,
-      gap: '0.25rem',
+      gap: '0.15rem',
     }),
     optionName: (isActive: boolean) => ({
       fontSize: '0.875rem',
       fontWeight: 600,
-      color: isActive ? '#60a5fa' : '#f8fafc',
+      color: isActive ? 'var(--accent-primary)' : 'var(--text-primary)',
     }),
     optionId: {
       fontSize: '0.75rem',
-      color: '#94a3b8',
+      color: 'var(--text-secondary)',
       opacity: 0.8,
     }
   };
@@ -236,7 +239,7 @@ export default function Autocomplete({
                             setSearch('');
                           }}
                           onMouseEnter={(e) => {
-                            if (!isActive) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                            if (!isActive) e.currentTarget.style.background = 'var(--bg-tertiary)';
                           }}
                           onMouseLeave={(e) => {
                             if (!isActive) e.currentTarget.style.background = 'transparent';
@@ -264,7 +267,7 @@ export default function Autocomplete({
                       setSearch('');
                     }}
                     onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      if (!isActive) e.currentTarget.style.background = 'var(--bg-tertiary)';
                     }}
                     onMouseLeave={(e) => {
                       if (!isActive) e.currentTarget.style.background = 'transparent';
@@ -292,11 +295,12 @@ export default function Autocomplete({
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
+          background: var(--glass-border);
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.2);
+          background: var(--text-muted);
+          opacity: 0.5;
         }
       `}} />
     </div>

@@ -196,7 +196,7 @@ export default function AgentsPage() {
                 <p>Gerencie o limite de uso e acompanhe o consumo da sua cota em tempo real.</p>
               </div>
               
-              <div style={{ background: 'rgba(0,0,0,0.1)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                 {(() => {
                   const pct = tokenQuota > 0 ? Math.min((tokenUsage / tokenQuota) * 100, 100) : 0;
                   const barColor = pct < 60 ? '#22c55e' : pct < 85 ? '#f59e0b' : '#ef4444';
@@ -213,7 +213,7 @@ export default function AgentsPage() {
                         </div>
                       </div>
                       
-                      <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '99px', overflow: 'hidden', marginBottom: '1.25rem' }}>
+                      <div style={{ height: '8px', background: 'var(--bg-primary)', borderRadius: '99px', overflow: 'hidden', marginBottom: '1.25rem' }}>
                         <div
                           style={{
                             height: '100%',
@@ -326,7 +326,7 @@ export default function AgentsPage() {
                         value={aiSettings.ai_model}
                         onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
                         placeholder="Ex: gpt-4o ou openrouter/model-id"
-                        style={{ width: '100%', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '12px', color: 'var(--text-primary)', outline: 'none', fontSize: '0.875rem' }}
+                        style={{ width: '100%', padding: '0.75rem 1rem', background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', borderRadius: '12px', color: 'var(--text-primary)', outline: 'none', fontSize: '0.875rem' }}
                       />
                     ) : (
                       <Autocomplete

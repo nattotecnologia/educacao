@@ -92,7 +92,7 @@ export default function NewAgentPage() {
 
   const s = {
     input: {
-      width: '100%', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.2)',
+      width: '100%', padding: '0.75rem 1rem', background: 'var(--bg-primary)',
       border: '1px solid var(--glass-border)', borderRadius: '8px',
       color: 'var(--text-primary)', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' as const
     },
@@ -102,7 +102,7 @@ export default function NewAgentPage() {
       textTransform: 'uppercase' as const, letterSpacing: '0.05em'
     },
     section: {
-      padding: '1.5rem', background: 'rgba(255,255,255,0.02)',
+      padding: '1.5rem', background: 'var(--bg-secondary)',
       border: '1px solid var(--glass-border)', borderRadius: '12px', display: 'flex',
       flexDirection: 'column' as const, gap: '1.25rem'
     },
@@ -189,7 +189,7 @@ export default function NewAgentPage() {
                     style={{
                       padding: '0.875rem 1rem', borderRadius: '10px', textAlign: 'left', cursor: 'pointer',
                       border: `1px solid ${form.agent_role === role.value ? 'var(--accent-primary)' : 'var(--glass-border)'}`,
-                      background: form.agent_role === role.value ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.15)',
+                      background: form.agent_role === role.value ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)' : 'var(--bg-primary)',
                       transition: 'all 0.15s'
                     }}
                   >
@@ -214,7 +214,7 @@ export default function NewAgentPage() {
             </div>
 
             {/* Agente Padrão */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
                   <Star size={14} style={{ color: '#f59e0b' }} /> Agente Padrão da Instituição
