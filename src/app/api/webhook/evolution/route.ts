@@ -160,8 +160,8 @@ function buildSystemPrompt(
     '⚠️ GERENCIAMENTO DE VISITAS EXISTENTES',
     '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
     '- Ao listar as visitas para o lead, seja cordial e mostre as datas de forma amigável.',
-    '- Se o lead quiser cancelar uma visita, PRIMEIRO use `list_visits` para identificar o ID e DEPOIS use `cancel_visit`.',
-    '- Se o lead quiser reagendar, PRIMEIRO use `list_visits` para identificar o ID, confirme o novo horário e DEPOIS use `reschedule_visit`.',
+    '- Se o lead quiser cancelar ou reagendar, você DEVE sempre usar `list_visits` primeiro para obter o ID da visita, a menos que o ID já tenha sido mencionado explicitamente na conversa.',
+    '- Use o ID curto (8 caracteres) fornecido por `list_visits` para chamar as ferramentas `cancel_visit` ou `reschedule_visit`.',
     '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar.',
     '',
     '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
@@ -387,10 +387,11 @@ async function executeTool(
       const [year, month, day, hour, min] = v.scheduled_at.substring(0, 16).split(/[-T:]/);
       const dateStr = `${day}/${month}/${year} às ${hour}:${min}`;
       const statusLabel = statusLabels[v.status] || v.status;
-      return `• *${dateStr}* — ${statusLabel} (ID: ${v.id.substring(0, 8)})`;
+      const shortId = v.id.substring(0, 8);
+      return `• *${dateStr}* — ${statusLabel} (ID: ${shortId})`;
     });
 
-    return `📅 Seus agendamentos:\n\n${lines.join('\n')}\n\nSe quiser cancelar ou reagendar, me informe qual visita.`;
+    return `📅 Seus agendamentos:\n\n${lines.join('\n')}\n\nSe quiser cancelar ou reagendar, me informe o ID ou a data da visita.`;
   }
 
   // ── cancel_visit ─────────────────────────────────────────────────────────
@@ -398,21 +399,34 @@ async function executeTool(
     const { visit_id } = args;
     if (!visit_id) return '❌ Preciso do ID da visita para cancelar.';
 
-    // Garante que pertence ao lead e à instituição
-    const { data: visit, error: findErr } = await supabase
+    // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
+    let query = supabase
       .from('visit_appointments')
       .select('id, scheduled_at, status')
-      .eq('id', visit_id)
-      .eq('institution_id', institutionId)
-      .maybeSingle();
+      .eq('institution_id', institutionId);
 
-    if (findErr || !visit) return '❌ Visita não encontrada ou sem permissão para cancelar.';
+    if (visit_id.length === 8) {
+      query = query.ilike('id', `${visit_id}%`);
+    } else {
+      query = query.eq('id', visit_id);
+    }
+
+    const { data: visits, error: findErr } = await query;
+
+    if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para cancelar.';
+    
+    if (visits.length > 1) {
+      return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, seja mais específico ou use a data.';
+    }
+
+    const visit = visits[0];
     if (visit.status === 'cancelled') return 'ℹ️ Esta visita já estava cancelada.';
+    if (visit.status === 'done') return '❌ Não é possível cancelar uma visita que já foi realizada.';
 
     const { error } = await supabase
       .from('visit_appointments')
       .update({ status: 'cancelled' })
-      .eq('id', visit_id);
+      .eq('id', visit.id);
 
     if (error) {
       console.error('[Webhook] Erro ao cancelar visita:', error.message);
@@ -428,24 +442,41 @@ async function executeTool(
     const { visit_id, new_scheduled_at } = args;
     if (!visit_id || !new_scheduled_at) return '❌ Preciso do ID da visita e do novo horário para reagendar.';
 
-    // Garante que pertence ao lead e à instituição
-    const { data: visit, error: findErr } = await supabase
+    // Busca a visita (suporta ID completo ou prefixo de 8 caracteres)
+    let query = supabase
       .from('visit_appointments')
       .select('id, scheduled_at, status')
-      .eq('id', visit_id)
-      .eq('institution_id', institutionId)
-      .maybeSingle();
+      .eq('institution_id', institutionId);
 
-    if (findErr || !visit) return '❌ Visita não encontrada ou sem permissão para reagendar.';
+    if (visit_id.length === 8) {
+      query = query.ilike('id', `${visit_id}%`);
+    } else {
+      query = query.eq('id', visit_id);
+    }
+
+    const { data: visits, error: findErr } = await query;
+
+    if (findErr || !visits || visits.length === 0) return '❌ Visita não encontrada ou sem permissão para reagendar.';
+    
+    if (visits.length > 1) {
+      return '⚠️ Encontrei mais de uma visita com esse ID parcial. Por favor, use o ID completo ou a data.';
+    }
+
+    const visit = visits[0];
     if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
+    if (visit.status === 'done') return '❌ Não é possível reagendar uma visita que já foi realizada.';
 
-    const localTimeString = new_scheduled_at.substring(0, 19);
-    const newDateUtc = localTimeString + 'Z';
+    // Normaliza a data (remove sufixos de fuso horário se existirem, mantendo o padrão local + Z)
+    const localTimeString = new_scheduled_at.includes('T') 
+      ? new_scheduled_at.split('.')[0].substring(0, 19)
+      : new_scheduled_at;
+    
+    const newDateUtc = localTimeString.endsWith('Z') ? localTimeString : localTimeString + 'Z';
 
     const { error } = await supabase
       .from('visit_appointments')
       .update({ scheduled_at: newDateUtc, status: 'scheduled' })
-      .eq('id', visit_id);
+      .eq('id', visit.id);
 
     if (error) {
       console.error('[Webhook] Erro ao reagendar visita:', error.message);
