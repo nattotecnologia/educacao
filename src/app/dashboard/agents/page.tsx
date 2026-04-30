@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Bot, Settings, Play, Pause, Plus, Activity, Cpu, Loader2, AlertCircle, BrainCircuit
+  Bot, Settings, Play, Pause, Plus, Activity, Cpu, Loader2, AlertCircle, BrainCircuit,
+  Key, Sparkles, Coins, ShieldCheck, Search
 } from 'lucide-react';
 import { agentService } from '@/services';
 import { getInstitutionSettings, updateInstitutionSettings, updateTokenQuota, fetchAvailableModels } from '../settings/actions';
+import Autocomplete from '@/components/ui/Autocomplete';
 
 import styles from './Agents.module.css';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -167,162 +169,188 @@ export default function AgentsPage() {
       </div>
 
       {showAiSettings && (
-        <div className="glass-panel animate-in" style={{ padding: '1.5rem', marginBottom: '2rem', border: '1px solid var(--accent-primary)' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <BrainCircuit size={20} /> Configuração Global da Inteligência
-          </h3>
-
-          {/* --- Barra de Progresso de Tokens --- */}
-          {(() => {
-            const pct = tokenQuota > 0 ? Math.min((tokenUsage / tokenQuota) * 100, 100) : 0;
-            const barColor = pct < 60
-              ? '#22c55e'
-              : pct < 85
-              ? '#f59e0b'
-              : '#ef4444';
-            return (
-              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Activity size={13} /> Uso de Tokens da LLM
-                  </span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: barColor }}>
-                    {pct.toFixed(1)}%
-                  </span>
-                </div>
-                {/* Track */}
-                <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '99px', overflow: 'hidden', position: 'relative' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${pct}%`,
-                      background: `linear-gradient(90deg, #22c55e, ${barColor})`,
-                      borderRadius: '99px',
-                      transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
-                      boxShadow: `0 0 8px ${barColor}66`,
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.45rem' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {tokenUsage.toLocaleString('pt-BR')} tokens usados
-                  </span>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Cota: {tokenQuota.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                {/* Ajuste de cota */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', alignItems: 'center' }}>
-                  <input
-                    type="number"
-                    value={newQuota}
-                    onChange={(e) => setNewQuota(e.target.value)}
-                    placeholder="Nova cota (tokens)"
-                    style={{ flex: 1, padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '7px', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
-                  />
-                  <button
-                    className="custom-button"
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}
-                    onClick={handleSaveQuota}
-                    disabled={savingQuota}
-                  >
-                    {savingQuota ? <Loader2 size={14} className="animate-spin" /> : 'Salvar Cota'}
-                  </button>
-                </div>
+        <div className={styles.aiSettingsWrapper}>
+          <div className={styles.aiSettingsHeader}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ padding: '0.5rem', background: 'var(--accent-primary)', borderRadius: '10px', color: '#fff' }}>
+                <BrainCircuit size={20} />
               </div>
-            );
-          })()}
-
-          {/* --- Configurações de Provedor/Modelo --- */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Provedor Principal</label>
-              <select 
-                value={aiSettings.ai_provider}
-                onChange={(e) => setAiSettings({...aiSettings, ai_provider: e.target.value})}
-                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
-              >
-                <option value="openai">OpenAI</option>
-                <option value="groq">Groq</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>API Key ({aiSettings.ai_provider.toUpperCase()})</label>
-              <input 
-                type="password"
-                value={aiSettings.ai_provider === 'openai' ? aiSettings.openai_key : aiSettings.ai_provider === 'groq' ? aiSettings.groq_key : aiSettings.openrouter_key}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const keyNode = aiSettings.ai_provider === 'openai' ? 'openai_key' : aiSettings.ai_provider === 'groq' ? 'groq_key' : 'openrouter_key';
-                  setAiSettings({...aiSettings, [keyNode]: val});
-                }}
-                placeholder="Insira sua chave"
-                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                <span>Modelo Padrão</span>
-                <button 
-                  type="button" 
-                  onClick={() => setIsManualModel(!isManualModel)}
-                  style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '0.7rem', cursor: 'pointer', padding: 0 }}
-                >
-                  {isManualModel ? 'Selecionar da Lista' : 'Inserir Manualmente'}
-                </button>
-              </label>
-              <div style={{ position: 'relative' }}>
-                {isManualModel ? (
-                  <input
-                    type="text"
-                    value={aiSettings.ai_model}
-                    onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
-                    placeholder="Ex: openrouter/model-id"
-                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
-                  />
-                ) : (
-                  <select 
-                    value={aiSettings.ai_model}
-                    onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
-                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', appearance: 'none' }}
-                    disabled={loadingModels}
-                  >
-                    <option value="">{loadingModels ? 'Buscando modelos...' : 'Selecione um modelo'}</option>
-                    {modelsList.length > 0 ? (
-                      <>
-                        <optgroup label="✨ Modelos Gratuitos (Free)">
-                          {modelsList.filter(m => m.category === 'free').map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="🚀 Modelos Premium / Pagos">
-                          {modelsList.filter(m => m.category === 'premium').map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </optgroup>
-                      </>
-                    ) : (
-                      aiSettings.ai_model && <option value={aiSettings.ai_model}>{aiSettings.ai_model}</option>
-                    )}
-                  </select>
-                )}
-                {loadingModels && (
-                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-                    <Loader2 size={14} className="animate-spin" />
-                  </div>
-                )}
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Configuração Global da Inteligência</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Defina o cérebro e os recursos de IA para todos os seus agentes.</p>
               </div>
-              <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                {modelsList.length > 0 ? `${modelsList.length} modelos encontrados.` : 'Insira a chave para listar os modelos.'}
-              </p>
             </div>
-
+            <button onClick={() => setShowAiSettings(false)} style={{ color: 'var(--text-muted)' }}>
+              <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+            </button>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--glass-border)' }}>
-             <button onClick={() => setShowAiSettings(false)} style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Cancelar</button>
-             <button className="custom-button" onClick={handleSaveAi} disabled={savingAi}>
-               {savingAi ? <Loader2 className="animate-spin" size={16} /> : 'Salvar Configuração de IA'}
+
+          <div className={styles.aiSettingsContent}>
+            {/* --- Seção de Uso e Cota --- */}
+            <div className={styles.settingsSection}>
+              <div className={styles.settingsInfo}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', marginBottom: '0.25rem' }}>
+                  <Coins size={16} />
+                  <h4 style={{ margin: 0 }}>Consumo de Tokens</h4>
+                </div>
+                <p>Gerencie o limite de uso e acompanhe o consumo da sua cota em tempo real.</p>
+              </div>
+              
+              <div style={{ background: 'rgba(0,0,0,0.1)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                {(() => {
+                  const pct = tokenQuota > 0 ? Math.min((tokenUsage / tokenQuota) * 100, 100) : 0;
+                  const barColor = pct < 60 ? '#22c55e' : pct < 85 ? '#f59e0b' : '#ef4444';
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                        <div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{pct.toFixed(1)}%</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacidade Utilizada</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{tokenUsage.toLocaleString('pt-BR')}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>de {tokenQuota.toLocaleString('pt-BR')} tokens</div>
+                        </div>
+                      </div>
+                      
+                      <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '99px', overflow: 'hidden', marginBottom: '1.25rem' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${pct}%`,
+                            background: `linear-gradient(90deg, #10b981, ${barColor})`,
+                            borderRadius: '99px',
+                            transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow: `0 0 10px ${barColor}44`
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                          <input
+                            type="number"
+                            value={newQuota}
+                            onChange={(e) => setNewQuota(e.target.value)}
+                            placeholder="Nova cota..."
+                            style={{ width: '100%', padding: '0.65rem 1rem', background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+                          />
+                        </div>
+                        <button
+                          className="custom-button"
+                          style={{ padding: '0.65rem 1.25rem', fontSize: '0.875rem' }}
+                          onClick={handleSaveQuota}
+                          disabled={savingQuota}
+                        >
+                          {savingQuota ? <Loader2 size={16} className="animate-spin" /> : 'Atualizar Cota'}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* --- Seção de Provedor e Chaves --- */}
+            <div className={styles.settingsSection}>
+              <div className={styles.settingsInfo}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', marginBottom: '0.25rem' }}>
+                  <ShieldCheck size={16} />
+                  <h4 style={{ margin: 0 }}>Provedor e Chaves</h4>
+                </div>
+                <p>Configure sua conexão com as APIs de inteligência artificial.</p>
+              </div>
+
+              <div className={styles.settingsInputs}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>Provedor de LLM</label>
+                  <select 
+                    value={aiSettings.ai_provider}
+                    onChange={(e) => setAiSettings({...aiSettings, ai_provider: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', borderRadius: '10px', color: 'var(--text-primary)', outline: 'none' }}
+                  >
+                    <option value="openai">OpenAI (Oficial)</option>
+                    <option value="groq">Groq (Ultra-Rápido)</option>
+                    <option value="openrouter">OpenRouter (Múltiplos)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>Chave de API</label>
+                  <div style={{ position: 'relative' }}>
+                    <Key size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="password"
+                      value={aiSettings.ai_provider === 'openai' ? aiSettings.openai_key : aiSettings.ai_provider === 'groq' ? aiSettings.groq_key : aiSettings.openrouter_key}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const keyNode = aiSettings.ai_provider === 'openai' ? 'openai_key' : aiSettings.ai_provider === 'groq' ? 'groq_key' : 'openrouter_key';
+                        setAiSettings({...aiSettings, [keyNode]: val});
+                      }}
+                      placeholder={`Sua chave ${aiSettings.ai_provider}...`}
+                      style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', borderRadius: '10px', color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.fullWidth}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} /> Modelo de Inteligência
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsManualModel(!isManualModel)}
+                      style={{ 
+                        background: 'rgba(59, 130, 246, 0.1)', 
+                        border: '1px solid rgba(59, 130, 246, 0.2)', 
+                        color: 'var(--accent-primary)', 
+                        fontSize: '0.7rem', 
+                        fontWeight: 700, 
+                        cursor: 'pointer', 
+                        padding: '0.4rem 0.8rem', 
+                        borderRadius: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                    >
+                      {isManualModel ? 'Selecionar da Lista' : 'Digitar Manualmente'}
+                    </button>
+                  </div>
+                  
+                  <div style={{ minHeight: '45px' }}>
+                    {isManualModel ? (
+                      <input
+                        type="text"
+                        value={aiSettings.ai_model}
+                        onChange={(e) => setAiSettings({...aiSettings, ai_model: e.target.value})}
+                        placeholder="Ex: gpt-4o ou openrouter/model-id"
+                        style={{ width: '100%', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '12px', color: 'var(--text-primary)', outline: 'none', fontSize: '0.875rem' }}
+                      />
+                    ) : (
+                      <Autocomplete
+                        options={modelsList}
+                        value={aiSettings.ai_model}
+                        onChange={(val) => setAiSettings({...aiSettings, ai_model: val})}
+                        placeholder={loadingModels ? "Buscando modelos disponíveis..." : "Pesquise um modelo de IA..."}
+                        isLoading={loadingModels}
+                      />
+                    )}
+                  </div>
+                  
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: 0.8 }}>
+                    <Search size={10} /> {modelsList.length > 0 ? `${modelsList.length} modelos sincronizados com seu provedor.` : 'Aguardando chave de API para sincronizar modelos.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.aiFooter}>
+             <button onClick={() => setShowAiSettings(false)} style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 500 }}>Descartar</button>
+             <button className="custom-button" onClick={handleSaveAi} disabled={savingAi} style={{ minWidth: '200px' }}>
+               {savingAi ? <Loader2 className="animate-spin" size={18} /> : 'Salvar Todas as Configurações'}
              </button>
           </div>
         </div>

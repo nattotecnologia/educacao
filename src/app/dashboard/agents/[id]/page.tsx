@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import {
+import { 
   Bot, ArrowLeft, Loader2, Save, Trash2, Sparkles, MessageSquare,
   Thermometer, Hash, Cpu, MessageCircle, Zap, Star,
-  AlignLeft, Clock, ToggleRight, Info
+  AlignLeft, Clock, ToggleRight, Info, Search
 } from 'lucide-react';
 import { agentService, AgentRole, AgentPayload, CommunicationStyle } from '@/services';
 import { CommunicationStylePicker } from '../components/CommunicationStylePicker';
+import { getInstitutionSettings, fetchAvailableModels } from '../../settings/actions';
+import Autocomplete from '@/components/ui/Autocomplete';
 
 const ROLE_OPTIONS: { value: AgentRole; label: string; emoji: string; description: string }[] = [
   { value: 'reception', label: 'Recepção', emoji: '🤝', description: '1º contato, boas-vindas e triagem de leads' },
@@ -49,6 +51,9 @@ export default function EditAgentPage() {
   const set = (key: keyof AgentPayload, value: any) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const [modelsList, setModelsList] = useState<any[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+
   useEffect(() => {
     async function fetchAgent() {
       try {
@@ -76,6 +81,29 @@ export default function EditAgentPage() {
       }
     }
     if (id) fetchAgent();
+
+    // Buscar modelos baseados na instituição
+    async function loadModels() {
+      setLoadingModels(true);
+      try {
+        const inst = await getInstitutionSettings();
+        if (inst && inst.ai_provider) {
+          const key = inst.ai_provider === 'openai' ? inst.openai_key : 
+                      inst.ai_provider === 'groq' ? inst.groq_key : 
+                      inst.openrouter_key;
+          
+          if (key && key.length > 10) {
+            const models = await fetchAvailableModels(inst.ai_provider, key);
+            setModelsList(models);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar modelos para override:', err);
+      } finally {
+        setLoadingModels(false);
+      }
+    }
+    loadModels();
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -316,12 +344,12 @@ export default function EditAgentPage() {
 
               <div>
                 <label style={s.label}><Cpu size={13} /> Modelo Específico (opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Ex: gpt-4o, llama-3.3-70b..."
+                <Autocomplete
+                  options={modelsList}
                   value={form.ai_model_override || ''}
-                  onChange={(e) => set('ai_model_override', e.target.value)}
-                  style={s.input}
+                  onChange={(val) => set('ai_model_override', val)}
+                  placeholder={loadingModels ? "Buscando modelos..." : "Selecione para sobrescrever o padrão"}
+                  isLoading={loadingModels}
                 />
                 <p style={s.hint}>Deixe vazio para usar o modelo da instituição.</p>
               </div>

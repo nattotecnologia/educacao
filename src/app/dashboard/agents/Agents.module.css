@@ -189,3 +189,81 @@
   gap: 1rem;
   color: var(--text-secondary);
 }
+
+.aiSettingsWrapper {
+  margin-bottom: 2.5rem;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.aiSettingsHeader {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.aiSettingsContent {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.settingsSection {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 2rem;
+}
+
+.settingsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settingsInfo h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.settingsInfo p {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.settingsInputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.aiFooter {
+  padding: 1.25rem 1.5rem;
+  background: rgba(0,0,0,0.1);
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .settingsSection {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .settingsInputs {
+    grid-template-columns: 1fr;
+  }
+}

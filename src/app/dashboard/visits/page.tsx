@@ -22,7 +22,7 @@ interface Visit {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
-  scheduled: { label: 'Agendada', color: 'var(--accent-primary)', icon: Clock },
+  scheduled: { label: 'Agendada', color: '#10b981', icon: Clock },
   confirmed: { label: 'Confirmada', color: '#10b981', icon: CheckCircle },
   done: { label: 'Finalizada', color: '#8b5cf6', icon: CheckCircle },
   cancelled: { label: 'Cancelada', color: '#ef4444', icon: XCircle },
@@ -618,7 +618,7 @@ export default function VisitsPage() {
           >
             {showNewForm ? (
               <>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: '#fff' }}>Agendar Nova Visita</h3>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Agendar Nova Visita</h3>
                 <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                   <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nome do Lead (Buscar ou Criar) *</label>
@@ -628,7 +628,7 @@ export default function VisitsPage() {
                         value={leadSearch}
                         onChange={e => handleLeadSearch(e.target.value)}
                         placeholder="Pesquisar por nome ou telefone..." 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
                         required
                       />
                       {leadSuggestions.length > 0 && (
@@ -656,7 +656,7 @@ export default function VisitsPage() {
                                 padding: '0.75rem 1rem', 
                                 textAlign: 'left', 
                                 borderBottom: '1px solid var(--glass-border)',
-                                color: '#fff',
+                                color: 'var(--text-primary)',
                                 display: 'flex',
                                 flexDirection: 'column'
                               }}
@@ -674,7 +674,7 @@ export default function VisitsPage() {
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
                       <input 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
                         value={form.lead_phone} 
                         onChange={e => setFormField('lead_phone', maskPhone(e.target.value))} 
                         placeholder="(00) 00000-0000"
@@ -684,7 +684,7 @@ export default function VisitsPage() {
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data *</label>
                       <input 
                         type="date" 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }} 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', colorScheme: 'dark' }} 
                         value={scheduledDate} 
                         onChange={e => setScheduledDate(e.target.value)} 
                         min={new Date().toISOString().split('T')[0]}
@@ -697,7 +697,7 @@ export default function VisitsPage() {
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Horário *</label>
                       <select 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }} 
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
                         value={scheduledTime} 
                         onChange={e => setScheduledTime(e.target.value)} 
                         required
@@ -716,7 +716,7 @@ export default function VisitsPage() {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
                     <textarea 
-                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', minHeight: '80px', resize: 'vertical' }} 
+                      style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', minHeight: '80px', resize: 'vertical' }} 
                       value={form.notes} 
                       onChange={e => setFormField('notes', e.target.value)}
                       placeholder="Alguma observação importante para a visita?"
@@ -741,7 +741,7 @@ export default function VisitsPage() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                   <div>
-                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
                       {selectedVisit.lead_name}
                     </h3>
                     {!isEditing && (
@@ -768,7 +768,7 @@ export default function VisitsPage() {
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Data</label>
                         <input 
                           type="date"
-                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', colorScheme: 'dark' }}
+                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', colorScheme: 'dark' }}
                           value={editForm.scheduled_date}
                           onChange={e => setEditForm({ ...editForm, scheduled_date: e.target.value })}
                         />
@@ -776,7 +776,7 @@ export default function VisitsPage() {
                       <div>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Horário</label>
                         <select 
-                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
                           value={editForm.scheduled_time}
                           onChange={e => setEditForm({ ...editForm, scheduled_time: e.target.value })}
                         >
@@ -793,7 +793,7 @@ export default function VisitsPage() {
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
                       <input 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }}
                         value={editForm.lead_phone}
                         onChange={e => setEditForm({ ...editForm, lead_phone: maskPhone(e.target.value) })}
                       />
@@ -802,7 +802,7 @@ export default function VisitsPage() {
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Observações</label>
                       <textarea 
-                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', minHeight: '80px' }}
+                        style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', minHeight: '80px' }}
                         value={editForm.notes}
                         onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
                       />
@@ -844,7 +844,7 @@ export default function VisitsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                        <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                          <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Telefone</label>
-                         <div style={{ color: '#fff', fontWeight: 600 }}>{maskPhone(selectedVisit.leads?.phone || selectedVisit.lead_phone || '') || 'Não informado'}</div>
+                         <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{maskPhone(selectedVisit.leads?.phone || selectedVisit.lead_phone || '') || 'Não informado'}</div>
                        </div>
                        
                        <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
@@ -942,7 +942,7 @@ export default function VisitsPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>Agendamentos</h3>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Agendamentos</h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{stackedModal.label}</p>
               </div>
               <button onClick={() => setStackedModal(s => ({ ...s, show: false }))} style={{ color: 'var(--text-muted)' }}>
@@ -977,7 +977,7 @@ export default function VisitsPage() {
                       <StatusIcon size={20} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
                         {visit.lead_name}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -1031,7 +1031,7 @@ export default function VisitsPage() {
               {confirmModal.type === 'danger' ? <XCircle size={32} /> : <CheckCircle size={32} />}
             </div>
             
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', marginBottom: '0.75rem' }}>{confirmModal.title}</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>{confirmModal.title}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '2rem' }}>{confirmModal.message}</p>
             
             <div style={{ display: 'flex', gap: '1rem' }}>
