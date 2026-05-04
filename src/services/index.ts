@@ -114,7 +114,67 @@ export const leadService = {
   },
 
   async delete(id: string) {
-    // Apaga apenas o histórico de mensagens do lead
+    // Remove as mensagens primeiro por segurança
+    const { error: msgError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('lead_id', id);
+    if (msgError) throw msgError;
+
+    // Remove o lead da tabela leads
+    const { error: leadError } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', id);
+    if (leadError) throw leadError;
+    return true;
+  },
+
+  async deleteMany(ids: string[]) {
+    // Remove as mensagens dos leads selecionados por segurança
+    const { error: msgError } = await supabase
+      .from('messages')
+      .delete()
+      .in('lead_id', ids);
+    if (msgError) throw msgError;
+
+    // Remove os leads
+    const { error: leadError } = await supabase
+      .from('leads')
+      .delete()
+      .in('id', ids);
+    if (leadError) throw leadError;
+    return true;
+  },
+
+  async deleteAll() {
+    const profile = await authService.getProfile();
+    const instId = profile.institution_id;
+
+    // Busca os IDs dos leads da instituição para deletar os dados
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('institution_id', instId);
+    
+    if (leads && leads.length > 0) {
+      const ids = leads.map(l => l.id);
+      const { error: msgError } = await supabase
+        .from('messages')
+        .delete()
+        .in('lead_id', ids);
+      if (msgError) throw msgError;
+
+      const { error: leadError } = await supabase
+        .from('leads')
+        .delete()
+        .in('id', ids);
+      if (leadError) throw leadError;
+    }
+    return true;
+  },
+
+  async clearChatHistory(id: string) {
     const { error } = await supabase
       .from('messages')
       .delete()
@@ -123,8 +183,7 @@ export const leadService = {
     return true;
   },
 
-  async deleteMany(ids: string[]) {
-    // Apaga o histórico de mensagens de vários leads
+  async clearChatHistoryMany(ids: string[]) {
     const { error } = await supabase
       .from('messages')
       .delete()
@@ -133,11 +192,10 @@ export const leadService = {
     return true;
   },
 
-  async deleteAll() {
+  async clearChatHistoryAll() {
     const profile = await authService.getProfile();
     const instId = profile.institution_id;
 
-    // Busca os IDs dos leads da instituição para limpar apenas as mensagens deles
     const { data: leads } = await supabase
       .from('leads')
       .select('id')

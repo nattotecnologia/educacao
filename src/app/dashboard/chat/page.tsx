@@ -215,15 +215,15 @@ export default function ChatPage() {
 
   const handleDeleteSingle = () => {
     openConfirmModal(
-      'Excluir Conversa',
-      'Tem certeza que deseja excluir esta conversa? Todas as mensagens e o lead serão removidos permanentemente.',
+      'Limpar Histórico da Conversa',
+      'Tem certeza que deseja apagar todas as mensagens desta conversa? O lead continuará salvo.',
       async () => {
         try {
-          await leadService.delete(selectedLead.id);
+          await leadService.clearChatHistory(selectedLead.id);
           setMessages([]);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao limpar histórico: ' + err.message);
+          alert('Erro ao excluir histórico: ' + err.message);
         }
       }
     );
@@ -232,16 +232,18 @@ export default function ChatPage() {
   const handleDeleteSelected = () => {
     openConfirmModal(
       'Limpar Históricos Selecionados',
-      `Tem certeza que deseja limpar o histórico de mensagens das ${selectedIds.size} conversas selecionadas? Os leads e seus agendamentos continuarão salvos.`,
+      `Tem certeza que deseja apagar o histórico de mensagens das ${selectedIds.size} conversas selecionadas? Os leads continuarão salvos.`,
       async () => {
         try {
-          await leadService.deleteMany(Array.from(selectedIds));
-          if (selectedLead && selectedIds.has(selectedLead.id)) setMessages([]);
+          await leadService.clearChatHistoryMany(Array.from(selectedIds));
+          if (selectedLead && selectedIds.has(selectedLead.id)) {
+            setMessages([]);
+          }
           setSelectedIds(new Set());
           setIsSelectionMode(false);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao limpar selecionados: ' + err.message);
+          alert('Erro ao limpar históricos selecionados: ' + err.message);
         }
       }
     );
@@ -253,14 +255,14 @@ export default function ChatPage() {
       'Isso apagará permanentemente o histórico de mensagens de TODOS os leads. Os dados dos contatos e agendamentos serão preservados. Deseja continuar?',
       async () => {
         try {
-          await leadService.deleteAll();
+          await leadService.clearChatHistoryAll();
           setMessages([]);
           setSelectedIds(new Set());
           setIsSelectionMode(false);
           setIsMoreMenuOpen(false);
           closeConfirmModal();
         } catch (err: any) {
-          alert('Erro ao limpar tudo: ' + err.message);
+          alert('Erro ao limpar todos os históricos: ' + err.message);
         }
       }
     );
@@ -415,7 +417,7 @@ export default function ChatPage() {
                 >
                   {selectedLead.status === 'human_handling' ? <><Bot size={16} /> IA</> : <><UserCog size={16} /> Assumir</>}
                 </button>
-                <button className={styles.deleteSingleBtn} onClick={handleDeleteSingle} title="Limpar Histórico">
+                 <button className={styles.deleteSingleBtn} onClick={handleDeleteSingle} title="Limpar Conversa">
                   <Trash2 size={20} />
                 </button>
               </div>
