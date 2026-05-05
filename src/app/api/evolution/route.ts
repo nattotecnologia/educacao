@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const instanceName = parsedInstanceName || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
 
     const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'null';
-    console.log(`[Evolution] POST action=${body.action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
+    console.log(`[Evolution] POST action=${action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
 
     if (!EVO_URL || !apiKey) {
       return NextResponse.json({ error: 'Configurações da Evolution não encontradas' }, { status: 500 });
