@@ -7,6 +7,10 @@ const WeeklyChart = dynamic(() => import('./components/WeeklyChart'), {
   ssr: false, 
   loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}><Loader2 className="animate-spin" /></div>
 });
+const EnrollmentEvolutionChart = dynamic(() => import('./components/EnrollmentEvolutionChart'), { 
+  ssr: false, 
+  loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}><Loader2 className="animate-spin" /></div>
+});
 import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2 } from 'lucide-react';
 import { authService } from '@/services';
 import { maskPhone } from '@/utils/masks';
@@ -31,6 +35,7 @@ interface Stats {
   recentLeads: any[];
   heatmapData: number[];
   rankedCourses?: { name: string; count: number }[];
+  enrollmentEvolution?: { name: string; count: number }[];
 }
 
 export default function Dashboard() {
@@ -72,7 +77,7 @@ export default function Dashboard() {
 
         const { data: enrollmentsData } = await supabase
           .from('enrollments')
-          .select('classes(courses(id, name))')
+          .select('enrolled_at, classes(courses(id, name))')
           .eq('institution_id', profile.institution_id);
 
         const courseCounts: Record<string, number> = {};
@@ -91,9 +96,36 @@ export default function Dashboard() {
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count);
 
+        // Calcular evolução histórica de matrículas (últimos 6 meses)
+        const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+        const evolutionMap: Record<string, number> = {};
+
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          const key = `${monthsMap[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
+          evolutionMap[key] = 0;
+        }
+
+        enrollmentsData?.forEach((e: any) => {
+          if (e.enrolled_at) {
+            const date = new Date(e.enrolled_at);
+            const key = `${monthsMap[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
+            if (evolutionMap[key] !== undefined) {
+              evolutionMap[key] += 1;
+            }
+          }
+        });
+
+        const evolution = Object.entries(evolutionMap).map(([name, count]) => ({
+          name,
+          count
+        }));
+
         setStats({
           ...data,
-          rankedCourses: ranked
+          rankedCourses: ranked,
+          enrollmentEvolution: evolution
         });
       } else {
         const text = await res.text();
@@ -232,6 +264,21 @@ export default function Dashboard() {
             <div className={styles.emptyChart}>
               <TrendingUp size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
               <p>Sem capturas nos últimos 7 dias. Os dados aparecerão aqui quando leads chegarem pelo WhatsApp.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Evolução de Matrículas */}
+        <div className="card">
+          <h3 className={styles.chartTitle}>Evolução de Matriculados (Últimos 6 Meses)</h3>
+          {stats.enrollmentEvolution && stats.enrollmentEvolution.some(d => d.count > 0) ? (
+            <div className={styles.chartContainer}>
+              <EnrollmentEvolutionChart data={stats.enrollmentEvolution} />
+            </div>
+          ) : (
+            <div className={styles.emptyChart}>
+              <TrendingUp size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
+              <p>Nenhuma matrícula registrada nos últimos 6 meses. Novas matrículas aparecerão aqui automaticamente.</p>
             </div>
           )}
         </div>
