@@ -30,6 +30,7 @@ interface Stats {
   weeklyChart: { name: string; ai: number; human: number }[];
   recentLeads: any[];
   heatmapData: number[];
+  rankedCourses?: { name: string; count: number }[];
 }
 
 export default function Dashboard() {
@@ -61,7 +62,39 @@ export default function Dashboard() {
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        setStats(data);
+
+        // Buscar dados de cursos e matrículas para o ranking de cursos em alta
+        const { data: coursesData } = await supabase
+          .from('courses')
+          .select('id, name')
+          .eq('institution_id', profile.institution_id)
+          .eq('is_active', true);
+
+        const { data: enrollmentsData } = await supabase
+          .from('enrollments')
+          .select('classes(courses(id, name))')
+          .eq('institution_id', profile.institution_id);
+
+        const courseCounts: Record<string, number> = {};
+        coursesData?.forEach((c) => {
+          courseCounts[c.name] = 0;
+        });
+
+        enrollmentsData?.forEach((e: any) => {
+          const courseName = e.classes?.courses?.name;
+          if (courseName && courseCounts[courseName] !== undefined) {
+            courseCounts[courseName] += 1;
+          }
+        });
+
+        const ranked = Object.entries(courseCounts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+
+        setStats({
+          ...data,
+          rankedCourses: ranked
+        });
       } else {
         const text = await res.text();
         console.error(`Erro: o servidor não retornou JSON (Status ${res.status}):`, text.substring(0, 150));
@@ -199,6 +232,42 @@ export default function Dashboard() {
             <div className={styles.emptyChart}>
               <TrendingUp size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
               <p>Sem capturas nos últimos 7 dias. Os dados aparecerão aqui quando leads chegarem pelo WhatsApp.</p>
+            </div>
+          )}
+        </div>
+ 
+        {/* Cursos em Alta */}
+        <div className="card">
+          <h3 className={styles.chartTitle}>Cursos em Alta (Ranking)</h3>
+          {!stats.rankedCourses || stats.rankedCourses.length === 0 ? (
+            <div className={styles.emptyChart}>
+              <TrendingUp size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
+              <p>Nenhum curso ativo registrado.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {stats.rankedCourses.map((c, idx) => {
+                const rank = idx + 1;
+                let badge = null;
+                if (rank === 1) badge = <span style={{ fontSize: '1.25rem' }}>🥇</span>;
+                else if (rank === 2) badge = <span style={{ fontSize: '1.25rem' }}>🥈</span>;
+                else if (rank === 3) badge = <span style={{ fontSize: '1.25rem' }}>🥉</span>;
+                else badge = <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)', width: '24px', display: 'inline-block', textAlign: 'center' }}>{rank}</span>;
+
+                return (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderRadius: '10px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', flexShrink: 0 }}>
+                        {badge}
+                      </div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={c.name}>{c.name}</span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-primary)', background: 'rgba(99, 102, 241, 0.1)', padding: '0.25rem 0.6rem', borderRadius: '6px', flexShrink: 0, marginLeft: '0.5rem' }}>
+                      {c.count} {c.count === 1 ? 'matrícula' : 'matrículas'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

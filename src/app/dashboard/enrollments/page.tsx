@@ -33,8 +33,41 @@ export default function EnrollmentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [courses, setCourses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  const fetchFiltersData = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const coursesRes = await fetch('/api/courses', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (coursesRes.ok) {
+        const coursesData = await coursesRes.json();
+        setCourses(coursesData || []);
+      }
+
+      const classesRes = await fetch('/api/classes?course_id=all', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (classesRes.ok) {
+        const classesData = await classesRes.json();
+        setClasses(classesData || []);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar dados dos filtros:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFiltersData();
+  }, [fetchFiltersData]);
 
   const fetchEnrollments = useCallback(async () => {
     setLoading(true);
@@ -44,6 +77,8 @@ export default function EnrollmentsPage() {
 
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
       if (statusFilter) params.set('status', statusFilter);
+      if (courseFilter) params.set('course_id', courseFilter);
+      if (classFilter) params.set('class_id', classFilter);
 
       const res = await fetch(`/api/enrollments?${params}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -57,7 +92,7 @@ export default function EnrollmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, courseFilter, classFilter]);
 
   useEffect(() => { fetchEnrollments(); }, [fetchEnrollments]);
 
@@ -101,6 +136,31 @@ export default function EnrollmentsPage() {
             style={{ width: '100%', padding: '0.65rem 0.875rem 0.65rem 2.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
           />
         </div>
+
+        <select
+          id="filter-course"
+          value={courseFilter}
+          onChange={e => { setCourseFilter(e.target.value); setClassFilter(''); setPage(1); }}
+          style={{ padding: '0.65rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none', minWidth: '150px' }}
+        >
+          <option value="">Todos os cursos</option>
+          {courses.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select
+          id="filter-class"
+          value={classFilter}
+          onChange={e => { setClassFilter(e.target.value); setPage(1); }}
+          style={{ padding: '0.65rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none', minWidth: '150px' }}
+        >
+          <option value="">Todas as turmas</option>
+          {(courseFilter ? classes.filter((c: any) => c.course_id === courseFilter) : classes).map((cl: any) => (
+            <option key={cl.id} value={cl.id}>{cl.name}</option>
+          ))}
+        </select>
+
         <select
           id="filter-status"
           value={statusFilter}

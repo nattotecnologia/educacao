@@ -28,19 +28,27 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get('class_id');
+  const courseId = searchParams.get('course_id');
   const status = searchParams.get('status');
   const page = parseInt(searchParams.get('page') || '1');
   const pageSize = parseInt(searchParams.get('pageSize') || '20');
 
+  let selectStr = '*, classes!inner(name, course_id, courses(name)), leads(name, phone)';
+  if (!courseId) {
+    // Se não filtrar por curso, podemos usar relação comum para evitar problemas com junções estritas
+    selectStr = '*, classes(name, course_id, courses(name)), leads(name, phone)';
+  }
+
   let query = supabase
     .from('enrollments')
-    .select('*, classes(name, courses(name)), leads(name, phone)', { count: 'exact' })
+    .select(selectStr, { count: 'exact' })
     .eq('institution_id', institutionId)
     .order('enrolled_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
   if (classId) query = query.eq('class_id', classId);
   if (status) query = query.eq('status', status);
+  if (courseId) query = query.eq('classes.course_id', courseId);
 
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
