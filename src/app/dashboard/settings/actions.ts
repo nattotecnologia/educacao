@@ -226,12 +226,12 @@ export async function getWebhookLogs() {
     const { data: logs, error } = await supabase
       .from('webhook_logs')
       .select('*')
-      .eq('institution_id', profile.institution_id)
+      .or(`institution_id.eq.${profile.institution_id},institution_id.is.null`)
       .order('created_at', { ascending: false })
       .limit(50);
 
     if (error) {
-      console.warn('Tabela webhook_logs não encontrada ou erro na busca:', error.message);
+      console.warn('Tabela webhook_logs nao encontrada ou erro na busca:', error.message);
       return [];
     }
 
