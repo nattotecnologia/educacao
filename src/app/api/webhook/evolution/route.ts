@@ -125,7 +125,8 @@ function buildSystemPrompt(
   leadPhone: string,
   institutionName: string,
   businessHours: any[] = [],
-  closedDays: any[] = []
+  closedDays: any[] = [],
+  institutionAbout: string = ''
 ): string {
   // Limpa placeholders comuns no prompt do usuário para evitar que a IA fale "[NOME DA INSTITUIÇÃO]"
   const sanitizedUserPrompt = (userSystemPrompt || '')
@@ -182,10 +183,10 @@ function buildSystemPrompt(
     '## SUAS CAPACIDADES E REGRAS DE OURO',
     'Voce pode: AGENDAR, LISTAR, CANCELAR e REAGENDAR visitas; LISTAR TURMAS abertas com vagas; e REGISTRAR PRE-MATRICULAS.',
     '',
-    '⚠️ REGRA DE FORMATACAO (WHATSAPP)',
+    'REGRA DE FORMATACAO (WHATSAPP)',
     '- No WhatsApp, o negrito e feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
     '',
-    '⚠️ GERENCIAMENTO DE VISITAS EXISTENTES',
+    'GERENCIAMENTO DE VISITAS EXISTENTES',
     '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
     '- Ao listar as visitas para o lead, seja cordial e mostre as datas de forma amigavel.',
     '- Se o lead quiser cancelar ou reagendar, voce DEVE sempre usar `list_visits` primeiro para obter o ID da visita.',
@@ -193,25 +194,25 @@ function buildSystemPrompt(
     '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar e pedir autorizacao final.',
     '- IMPORTANTE: Ao pedir confirmacao, mencione sempre o ID curto da visita (ex: "para a visita de ID abc12345").',
     '',
-    '⚠️ LISTAGEM DE TURMAS ABERTAS',
+    'LISTAGEM DE TURMAS ABERTAS',
     '- Use a ferramenta `list_classes` quando o lead perguntar: quais turmas estao abertas, voces tem vagas, tem turma de [curso], quais as opcoes, ou similares.',
     '- A ferramenta retorna dados em tempo real do banco. NUNCA invente ou suponha informacoes de turmas.',
     '- Apos listar as turmas, pergunte se o lead deseja se inscrever ou tem duvidas sobre algum curso.',
     '- Voce pode passar o nome do curso como filtro (course_name) se o lead ja especificou o curso que procura.',
     '',
-    '⚠️ REGRA DE OURO: CONFIRMACAO OBRIGATORIA (MANDATORIA)',
+    'REGRA DE OURO: CONFIRMACAO OBRIGATORIA (MANDATORIA)',
     '- Antes de executar QUALQUER ferramenta de escrita (register_visit, register_enrollment, cancel_visit, reschedule_visit), voce DEVE resumir os dados para o usuario e perguntar: Esta correto? Posso prosseguir?.',
     '- So execute a ferramenta se o usuario responder afirmativamente (ex: Sim, Pode, Tudo certo).',
     '',
-    '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
+    'REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
     '- Antes de pedir qualquer dado, VALORIZE o interesse do lead.',
     '- Se o lead perguntar sobre um curso, PRIMEIRO explique os beneficios e detalhes usando a BASE DE CONHECIMENTO, depois ofereça a listagem de turmas via `list_classes`.',
     '',
-    '⚠️ DISTINCAO CRITICA ENTRE VISITA E MATRICULA (NUNCA CONFUNDA AS DUAS)',
+    'DISTINCAO CRITICA ENTRE VISITA E MATRICULA (NUNCA CONFUNDA AS DUAS)',
     '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaco. E ESTRITAMENTE PROIBIDO pedir nome completo, telefone, nome da crianca, idade ou qual curso ao agendar uma visita. Voce so precisa da DATA e HORA.',
     '- FAZER PRE-MATRICULA: O lead quer reservar uma vaga em uma turma especifica. Siga o FLUXO DE PRE-MATRICULA abaixo.',
     '',
-    '⚠️ FLUXO DE PRE-MATRICULA (SIGA ESTA ORDEM EXATA)',
+    'FLUXO DE PRE-MATRICULA (SIGA ESTA ORDEM EXATA)',
     '- PASSO 1: Se o lead nao especificou a turma, use `list_classes` para mostrar as opcoes disponiveis com vagas reais.',
     '- PASSO 2: O lead escolhe a turma. NUNCA assuma que ainda ha vagas — a `list_classes` ja faz essa verificacao em tempo real.',
     '- PASSO 3: Colete os dados do aluno UM POR VEZ nesta ordem: Nome completo do aluno -> E-mail do aluno -> CPF (opcional).',
@@ -220,7 +221,7 @@ function buildSystemPrompt(
     '- NUNCA peca nome e e-mail na mesma mensagem. Um dado por vez.',
     '- ATENCAO: O nome do aluno pode ser DIFERENTE do nome do lead. Sempre pergunte o nome do aluno.',
     '',
-    '⚠️ REGRAS DE AGENDAMENTO (LEIA COM ATENCAO MAXIMA)',
+    'REGRAS DE AGENDAMENTO (LEIA COM ATENCAO MAXIMA)',
     'Para agendar, VOCE DEVE SE BASEAR UNICA E EXCLUSIVAMENTE no calendario abaixo.',
     '## CALENDARIO DE DISPONIBILIDADE (PROXIMOS 14 DIAS):',
     upcomingCalendar.join('\n'),
@@ -229,12 +230,12 @@ function buildSystemPrompt(
     '- IMPORTANTE: Se o usuario pedir um horario em dia FECHADO, informe o motivo e sugira o PROXIMO dia ABERTO.',
     '- IMPORTANTE: Se o horario pedido estiver fora da faixa, avise e sugira um horario valido.',
     '',
-    '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
+    'REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
     '- E ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faca as perguntas de forma natural.',
     '- Peca apenas UM dado por vez.',
     '- Nunca peca o nome ou o telefone do lead. Eles ja estao explicitos no Contexto do Atendimento acima.',
     '',
-    '⚠️ REGRA DE OURO 3: EXECUCAO DO AGENDAMENTO DE VISITA',
+    'REGRA DE OURO 3: EXECUCAO DO AGENDAMENTO DE VISITA',
     '- PASSO 1: Assim que o usuario disser o dia e horario, resuma a solicitacao e pergunte se pode agendar.',
     '- PASSO 2: Somente apos a confirmacao do usuario, use a ferramenta `register_visit` para salvar.',
     '- Se o seu sistema nao lidar bem com chamadas de funcao nativas, retorne EXCLUSIVAMENTE o bloco de codigo JSON abaixo para o agendamento:',
@@ -243,7 +244,7 @@ function buildSystemPrompt(
     '```',
     '- Use a Data e Hora Atuais do contexto para deduzir o ano, mes e dia.',
     '',
-    '⚠️ REGRA ANTI-ALUCINACAO (MANDATORIA)',
+    'REGRA ANTI-ALUCINACAO (MANDATORIA)',
     '- NUNCA invente perguntas sobre qual unidade, a nao ser que tenha varias unidades descritas no seu contexto.',
     '- NUNCA esqueca a data/horario que o usuario enviou nos turnos anteriores. Nao pergunte de novo!',
     '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORARIO se o usuario nao falou.',
@@ -251,11 +252,11 @@ function buildSystemPrompt(
     '- Se o endereco ou telefone nao constar na base, APENAS DIGA que a secretaria enviara a localizacao completa.',
     '- Se disser em texto que agendou, mas nao engatilhar a ferramenta/JSON, voce falhou.',
     '',
-    '⚠️ REGRA DE SILENCIO DURANTE EXECUCAO (CRITICO)',
+    'REGRA DE SILENCIO DURANTE EXECUCAO (CRITICO)',
     '- NUNCA diga frases como Agendado!, Pronto!, Ja fiz ou Tudo certo no MESMO turno em que voce aciona a ferramenta `register_visit` ou `register_enrollment`.',
     '- Se voce nao enviou o bloco JSON, ESTA PROIBIDO de dizer que agendou.',
     '',
-    '⚠️ REGRA DE OURO 4: EXECUCAO DE PRE-MATRICULA',
+    'REGRA DE OURO 4: EXECUCAO DE PRE-MATRICULA',
     '- Somente apos obter todos os dados necessarios (nome do aluno, e-mail e turma escolhida), apresente um resumo e peca confirmacao antes de usar `register_enrollment`.',
     '- Apos o sucesso do `register_enrollment`, informe ao lead que a equipe da instituicao entrara em contato para confirmar os detalhes e informacoes de pagamento.'
   ].join('\n');
@@ -282,6 +283,8 @@ function buildSystemPrompt(
     capabilities,
     '',
     knowledge,
+    '',
+    institutionAbout ? `## SOBRE A INSTITUICAO\n${institutionAbout}` : '',
     styleGuide ? `\n${styleGuide}` : '',
   ]
     .join('\n')
@@ -298,16 +301,16 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'register_enrollment',
       description:
-        'Registra a matrícula de um aluno em uma turma. Use SOMENTE APÓS o usuário confirmar explicitamente os dados resumidos por você.',
+        'Registra a matricula de um aluno em uma turma. Use SOMENTE APOS o usuario confirmar explicitamente os dados resumidos por voce.',
       parameters: {
         type: 'object',
         properties: {
           student_name: { type: 'string', description: 'Nome completo do aluno' },
           student_email: { type: 'string', description: 'E-mail do aluno' },
-          student_phone: { type: 'string', description: 'Telefone do aluno (já conhecido)' },
+          student_phone: { type: 'string', description: 'Telefone do aluno (ja conhecido)' },
           student_cpf: { type: 'string', description: 'CPF do aluno (opcional)' },
           class_name: { type: 'string', description: 'Nome exato da turma conforme a base de conhecimento' },
-          notes: { type: 'string', description: 'Observações adicionais (opcional)' },
+          notes: { type: 'string', description: 'Observacoes adicionais (opcional)' },
         },
         required: ['student_name', 'student_email', 'class_name'],
       },
@@ -318,17 +321,17 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'register_visit',
       description:
-        'Agenda uma visita à instituição. OBRIGATÓRIO: Use SOMENTE DEPOIS que o usuário confirmar explicitamente o resumo da data e hora enviado por você.',
+        'Agenda uma visita a instituicao. OBRIGATORIO: Use SOMENTE DEPOIS que o usuario confirmar explicitamente o resumo da data e hora enviado por voce.',
       parameters: {
         type: 'object',
         properties: {
           lead_name: { type: 'string', description: 'Nome do interessado' },
-          lead_phone: { type: 'string', description: 'Telefone (já conhecido)' },
+          lead_phone: { type: 'string', description: 'Telefone (ja conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita. OBRIGATÓRIO: Coloque EXATAMENTE o número da hora que o usuário pediu no formato YYYY-MM-DDTHH:mm:00. NUNCA some ou subtraia horários. NÃO coloque sufixo de fuso horário (nem Z, nem -03:00). Apenas a hora pura.',
+            description: 'Data e hora da visita. OBRIGATORIO: Coloque EXATAMENTE o numero da hora que o usuario pediu no formato YYYY-MM-DDTHH:mm:00. NUNCA some ou subtraia horarios. NAO coloque sufixo de fuso horario (nem Z, nem -03:00). Apenas a hora pura.',
           },
-          notes: { type: 'string', description: 'Observações ou interesses do visitante (opcional)' },
+          notes: { type: 'string', description: 'Observacoes ou interesses do visitante (opcional)' },
         },
         required: ['lead_name', 'scheduled_at'],
       },
@@ -339,13 +342,13 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'list_visits',
       description:
-        'Busca e lista todas as visitas agendadas (ativas ou passadas) associadas ao lead. Use sempre que o lead perguntar "quais meus agendamentos", "quando é minha visita", ou demonstrar dúvida sobre o horário marcado.',
+        'Busca e lista todas as visitas agendadas associadas ao lead. Use sempre que o lead perguntar sobre seus agendamentos ou demonstrar duvida sobre o horario marcado.',
       parameters: {
         type: 'object',
         properties: {
           include_past: {
             type: 'boolean',
-            description: 'Se true, inclui visitas passadas. Por padrão só retorna futuras.',
+            description: 'Se true, inclui visitas passadas. Por padrao so retorna futuras.',
           },
         },
         required: [],
@@ -357,7 +360,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'cancel_visit',
       description:
-        'Cancela uma visita agendada. Use SOMENTE após o usuário confirmar explicitamente que deseja cancelar a visita específica identificada.',
+        'Cancela uma visita agendada. Use SOMENTE apos o usuario confirmar explicitamente que deseja cancelar.',
       parameters: {
         type: 'object',
         properties: {
@@ -372,14 +375,14 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'reschedule_visit',
       description:
-        'Reagenda uma visita existente para uma nova data e hora. Use SOMENTE após o usuário confirmar explicitamente os novos dados de data/hora resumidos por você.',
+        'Reagenda uma visita existente. Use SOMENTE apos o usuario confirmar explicitamente os novos dados de data/hora.',
       parameters: {
         type: 'object',
         properties: {
           visit_id: { type: 'string', description: 'ID da visita a reagendar (obtido via list_visits)' },
           new_scheduled_at: {
             type: 'string',
-            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00. NUNCA adicione sufixo de fuso horário.',
+            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00.',
           },
         },
         required: ['visit_id', 'new_scheduled_at'],
@@ -391,13 +394,13 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'list_classes',
       description:
-        'Busca e lista todas as turmas abertas com vagas disponíveis em tempo real. Use quando o lead perguntar sobre turmas abertas, vagas disponíveis, ou opções de cursos, e também antes de registrar uma matrícula para confirmar disponibilidade.',
+        'Busca e lista todas as turmas abertas com vagas disponiveis em tempo real. Use quando o lead perguntar sobre turmas abertas, vagas ou opcoes de cursos.',
       parameters: {
         type: 'object',
         properties: {
           course_name: {
             type: 'string',
-            description: 'Nome do curso para filtrar (opcional). Se não informado, retorna todas as turmas abertas.',
+            description: 'Nome do curso para filtrar (opcional).',
           },
         },
         required: [],
@@ -1064,7 +1067,8 @@ export async function POST(request: NextRequest) {
       phoneNumber,
       institution.name,
       institution.business_hours,
-      institution.closed_days
+      institution.closed_days,
+      institution.about || ''
     );
 
     const model: string = agent.ai_model_override || institution.ai_model || 'gpt-4o';
