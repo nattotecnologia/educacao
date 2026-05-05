@@ -253,7 +253,7 @@ export default function Dashboard() {
       </div>
 
       {/* Gráficos Principais (Lado a Lado, Mesmo Tamanho) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem' }}>
         <div className="card">
           <h3 className={styles.chartTitle}>Novas Capturas Semanais (IA vs Humano)</h3>
           {stats.weeklyChart.some(d => d.ai > 0 || d.human > 0) ? (
