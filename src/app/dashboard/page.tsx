@@ -252,8 +252,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Gráficos */}
-      <div className={styles.chartsGrid}>
+      {/* Gráficos Principais (Lado a Lado, Mesmo Tamanho) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
         <div className="card">
           <h3 className={styles.chartTitle}>Novas Capturas Semanais (IA vs Humano)</h3>
           {stats.weeklyChart.some(d => d.ai > 0 || d.human > 0) ? (
@@ -282,7 +282,10 @@ export default function Dashboard() {
             </div>
           )}
         </div>
- 
+      </div>
+
+      {/* Cartões de Desempenho e Atividades (3 em uma Linha Só) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
         {/* Cursos em Alta */}
         <div className="card">
           <h3 className={styles.chartTitle}>Cursos em Alta (Ranking)</h3>
