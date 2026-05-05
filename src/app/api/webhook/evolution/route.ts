@@ -443,6 +443,19 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_enrollments',
+      description:
+        'Busca e lista todas as pre-matriculas (ou matriculas) pendentes ou ativas registradas para o lead em tempo real. Use sempre que o lead perguntar sobre o status da sua pre-matricula ou quiser verificar se a pre-matricula dele foi salva com sucesso.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -460,6 +473,65 @@ async function executeTool(
   phone: string,
   classes: ClassRow[]
 ): Promise<string> {
+  // ── list_enrollments ─────────────────────────────────────────────────────
+  if (toolName === 'list_enrollments') {
+    if (!leadId) return '❌ Não consegui identificar seu cadastro para buscar as pré-matrículas.';
+
+    const { data: enrolls, error } = await supabase
+      .from('enrollments')
+      .select('id, student_name, status, classes(name, courses(name))')
+      .eq('lead_id', leadId)
+      .eq('institution_id', institutionId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[Webhook] Erro ao listar matrículas:', error.message);
+      
+      const { data: fallbackEnrolls, error: fbError } = await supabase
+        .from('enrollments')
+        .select('id, student_name, status')
+        .eq('lead_id', leadId)
+        .eq('institution_id', institutionId)
+        .order('created_at', { ascending: false });
+
+      if (fbError || !fallbackEnrolls || fallbackEnrolls.length === 0) {
+        return 'ℹ️ Você não possui pré-matrículas registradas no momento.';
+      }
+
+      const statusLabels: Record<string, string> = {
+        pending: 'Em análise 🕐',
+        approved: 'Aprovada / Ativa ✅',
+        cancelled: 'Cancelada ❌',
+      };
+
+      const lines = fallbackEnrolls.map((e: any) => {
+        const statusLabel = statusLabels[e.status] || e.status;
+        return `• Aluno: *${e.student_name}* | Status: ${statusLabel}`;
+      });
+
+      return `🎓 Suas pré-matrículas registradas:\n\n${lines.join('\n')}`;
+    }
+
+    if (!enrolls || enrolls.length === 0) {
+      return 'ℹ️ Você não possui pré-matrículas registradas no momento.';
+    }
+
+    const statusLabels: Record<string, string> = {
+      pending: 'Em análise 🕐',
+      approved: 'Aprovada / Ativa ✅',
+      cancelled: 'Cancelada ❌',
+    };
+
+    const lines = enrolls.map((e: any) => {
+      const statusLabel = statusLabels[e.status] || e.status;
+      const className = e.classes?.name || 'Turma';
+      const courseName = (e.classes?.courses as any)?.name || 'Curso';
+      return `• Aluno: *${e.student_name}*\n  Curso: ${courseName} (Turma: "${className}")\n  Status: ${statusLabel}`;
+    });
+
+    return `🎓 Suas pré-matrículas registradas:\n\n${lines.join('\n\n')}`;
+  }
+
   // ── list_classes ─────────────────────────────────────────────────────────
   if (toolName === 'list_classes') {
     const { course_name } = args;
