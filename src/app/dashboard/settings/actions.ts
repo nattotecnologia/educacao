@@ -208,3 +208,36 @@ export async function fetchAvailableModels(provider: string, apiKey: string) {
     throw error;
   }
 }
+
+export async function getWebhookLogs() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Não autorizado");
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('institution_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.institution_id) return [];
+
+    const { data: logs, error } = await supabase
+      .from('webhook_logs')
+      .select('*')
+      .eq('institution_id', profile.institution_id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.warn('Tabela webhook_logs não encontrada ou erro na busca:', error.message);
+      return [];
+    }
+
+    return logs;
+  } catch (error) {
+    console.error('Erro em getWebhookLogs:', error);
+    return [];
+  }
+}

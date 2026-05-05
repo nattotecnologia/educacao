@@ -4,6 +4,8 @@ import OpenAI from 'openai';
 import { decrypt } from '@/utils/encryption';
 import { rateLimit } from '@/utils/rate-limit';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -53,6 +55,40 @@ function verifyWebhookSignature(request: NextRequest, body: string): boolean {
 
   const expected = crypto.createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
   return signature === expected;
+}
+
+// Helper to log errors in Supabase and locally for debugging
+async function logWebhookError(
+  supabase: any,
+  institutionId: string | null,
+  phone: string | null,
+  message: string,
+  payload: any = null
+) {
+  // 1. Gravação no Supabase (depende da migração da tabela)
+  try {
+    await supabase.from('webhook_logs').insert({
+      institution_id: institutionId,
+      lead_phone: phone,
+      level: 'error',
+      message,
+      payload
+    });
+  } catch (err) {
+    console.error('[Webhook] Falha ao gravar log no Supabase:', err);
+  }
+
+  // 2. Gravação em arquivo local (webhook_errors.log) - Sempre funciona localmente
+  try {
+    const logFilePath = path.join(process.cwd(), 'webhook_errors.log');
+    const timestamp = new Date().toISOString();
+    const cleanPayload = payload ? JSON.stringify(payload) : '';
+    const logLine = `[${timestamp}] [Phone: ${phone || 'unknown'}] ERROR: ${message} | PAYLOAD: ${cleanPayload}\n`;
+    fs.appendFileSync(logFilePath, logLine, 'utf8');
+    console.log('[Webhook] Log gravado localmente em webhook_errors.log');
+  } catch (fsErr) {
+    console.error('[Webhook] Falha ao gravar log local:', fsErr);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -829,6 +865,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid Signature' }, { status: 401 });
   }
 
+  let institution: any = null;
+  let phoneNumber: string | null = null;
+
   try {
     const payload = JSON.parse(bodyText);
     const instanceName = payload.instance;
@@ -837,16 +876,17 @@ export async function POST(request: NextRequest) {
     console.log(`[Webhook] Instância: ${instanceName} | Evento: ${event}`);
 
     // 1. Identifica a Instituição
-    const { data: institution, error: instError } = await supabaseAdmin
+    const { data: instData, error: instError } = await supabaseAdmin
       .from('institutions')
       .select('*')
       .eq('evolution_instance_name', instanceName)
       .single();
 
-    if (instError || !institution) {
+    if (instError || !instData) {
       console.error(`[Webhook] Instituição não encontrada para "${instanceName}"`);
       return NextResponse.json({ error: 'Institution_Not_Found' }, { status: 404 });
     }
+    institution = instData;
     console.log(`[Webhook] Instituição: ${institution.name} (ID: ${institution.id})`);
 
     // 2. Trata eventos de conexão
@@ -877,7 +917,7 @@ export async function POST(request: NextRequest) {
     const remoteJidAlt: string | undefined = payload.data.key.remoteJidAlt;
     const sender: string | undefined = payload.sender;
 
-    let phoneNumber = phoneRemoteJid.split('@')[0];
+    phoneNumber = phoneRemoteJid.split('@')[0];
     if (phoneRemoteJid.includes('@lid')) {
       if (remoteJidAlt) phoneNumber = remoteJidAlt.split('@')[0];
       else if (sender) phoneNumber = sender.split('@')[0];
@@ -1292,6 +1332,14 @@ export async function POST(request: NextRequest) {
       const errMsg = aiError instanceof Error ? aiError.message : String(aiError);
       console.error('[Webhook] ERRO NA CHAMADA DA IA:', errMsg);
       
+      await logWebhookError(
+        supabaseAdmin,
+        institution?.id || null,
+        phoneNumber || null,
+        `Erro na chamada da IA (${model}): ${errMsg}`,
+        { errorStack: aiError instanceof Error ? aiError.stack : null }
+      );
+      
       botMessage =
         agent.fallback_message ||
         'Desculpe, estou com dificuldades no momento. Um atendente irá te ajudar em breve.';
@@ -1340,6 +1388,15 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.stack || error.message : String(error);
     console.error('[Webhook] ERRO CRÍTICO:', errMsg);
+    
+    try {
+      const instId = typeof institution !== 'undefined' && institution ? institution.id : null;
+      const phone = typeof phoneNumber !== 'undefined' ? phoneNumber : null;
+      await logWebhookError(supabaseAdmin, instId, phone, `Erro crítico no webhook: ${errMsg}`);
+    } catch (logErr) {
+      console.error('[Webhook] Falha ao tentar gravar erro crítico no Supabase:', logErr);
+    }
+
     return NextResponse.json({ error: 'Internal_Server_Error', details: errMsg }, { status: 500 });
   }
 }

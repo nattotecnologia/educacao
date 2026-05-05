@@ -4,13 +4,17 @@ import { useState, useEffect } from 'react';
 import { 
   Globe, Loader2, Save, 
   Palette, Upload, Moon, Sun,
-  Clock, Calendar, Trash2, Plus
+  Clock, Calendar, Trash2, Plus, Terminal, FileText
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNotification } from '@/contexts/NotificationContext';
 import styles from './Settings.module.css';
 import { createClient } from '@/utils/supabase/client';
-import { getInstitutionSettings, updateInstitutionSettings, getPlatformSettings, updatePlatformSettings } from './actions';
+import { 
+  getInstitutionSettings, updateInstitutionSettings, 
+  getPlatformSettings, updatePlatformSettings,
+  getWebhookLogs
+} from './actions';
 
 export default function SettingsPage() {
   const { addNotification } = useNotification();
@@ -18,20 +22,22 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'geral' | 'horarios' | 'whitelabel'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'horarios' | 'whitelabel' | 'logs'>('geral');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [institution, setInstitution] = useState<any>(null);
   const [platform, setPlatform] = useState<any>(null);
+  const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
     setMounted(true);
     async function fetchData() {
       try {
-        const [instData, platData] = await Promise.all([
+        const [instData, platData, logsData] = await Promise.all([
           getInstitutionSettings(),
           getPlatformSettings(),
+          getWebhookLogs()
         ]);
         if (instData) {
           setInstitution({
@@ -51,6 +57,9 @@ export default function SettingsPage() {
         if (platData) {
           setPlatform(platData);
           document.documentElement.style.setProperty('--accent-primary', platData.primary_color || '#3b82f6');
+        }
+        if (logsData) {
+          setLogs(logsData);
         }
       } catch (err: any) {
         addNotification({ type: 'error', title: 'Erro', message: 'Falha ao carregar configurações.' });
@@ -141,6 +150,9 @@ export default function SettingsPage() {
         </button>
         <button type="button" onClick={() => setActiveTab('whitelabel')} className={`${styles.navButton} ${activeTab === 'whitelabel' ? styles.navButtonActive : ''}`}>
           <Palette size={18} /> Personalização
+        </button>
+        <button type="button" onClick={() => setActiveTab('logs')} className={`${styles.navButton} ${activeTab === 'logs' ? styles.navButtonActive : ''}`}>
+          <Terminal size={18} /> Logs do Agente
         </button>
         
         <button 
@@ -404,6 +416,71 @@ export default function SettingsPage() {
                    Nenhum feriado cadastrado.
                  </p>
                )}
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'logs' && (
+          <section className={styles.section}>
+            <header className={styles.sectionHeader}>
+              <div>
+                <h2>Logs do Agente IA</h2>
+                <p>Monitore requisições, erros de conexão de APIs ou timeouts do seu agente.</p>
+              </div>
+              <button 
+                type="button" 
+                className={styles.fetchBtn} 
+                style={{ padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)' }}
+                onClick={async () => {
+                  setLoading(true);
+                  const logsData = await getWebhookLogs();
+                  if (logsData) setLogs(logsData);
+                  setLoading(false);
+                }}
+              >
+                Atualizar Logs
+              </button>
+            </header>
+
+            <div className={styles.logsContainer}>
+              {logs.length > 0 ? (
+                <div className={styles.logsTableWrapper}>
+                  <table className={styles.logsTable}>
+                    <thead>
+                      <tr>
+                        <th>Data/Hora</th>
+                        <th>Telefone</th>
+                        <th>Mensagem/Erro</th>
+                        <th>Payload Detalhado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((log: any) => (
+                        <tr key={log.id} className={log.level === 'error' ? styles.logRowError : ''}>
+                          <td className={styles.logTime}>{new Date(log.created_at).toLocaleString('pt-BR')}</td>
+                          <td className={styles.logPhone}>{log.lead_phone || 'N/A'}</td>
+                          <td className={styles.logMessage}>{log.message}</td>
+                          <td className={styles.logPayload}>
+                            {log.payload ? (
+                              <pre className={styles.logPayloadPre}>
+                                {JSON.stringify(log.payload, null, 2)}
+                              </pre>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>Sem detalhes</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.emptyLogs}>
+                  <FileText size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+                  <h3>Nenhum log registrado</h3>
+                  <p>Caso ocorram erros de IA no webhook, eles aparecerão detalhadamente aqui.</p>
+                </div>
+              )}
             </div>
           </section>
         )}

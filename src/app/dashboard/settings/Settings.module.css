@@ -418,3 +418,110 @@
     align-items: stretch;
   }
 }
+
+/* Logs do Agente */
+.logsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.logsTableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+}
+
+.logsTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.logsTable th {
+  padding: 1rem 1.5rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--glass-border);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.logsTable td {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+
+.logRowError {
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.logRowError td {
+  border-bottom-color: rgba(239, 68, 68, 0.1);
+}
+
+.logTime {
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.logPhone {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.logMessage {
+  font-weight: 500;
+  max-width: 350px;
+}
+
+.logPayload {
+  max-width: 300px;
+}
+
+.logPayloadPre {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  max-height: 150px;
+  color: #a7f3d0; /* Soft green */
+}
+
+.logRowError .logPayloadPre {
+  color: #fca5a5; /* Soft red */
+}
+
+.emptyLogs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--glass-bg);
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-md);
+}
+
+.emptyLogs h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.emptyLogs p {
+  color: var(--text-secondary);
+  max-width: 400px;
+  font-size: 0.95rem;
+}
