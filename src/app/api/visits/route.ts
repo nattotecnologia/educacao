@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,20 +43,34 @@ export async function GET(request: NextRequest) {
   if (to) query = query.lte('scheduled_at', to);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[Visits GET Error]:', error.message);
+    return NextResponse.json({ error: 'Erro ao buscar agendamentos.' }, { status: 500 });
+  }
   return NextResponse.json(data);
 }
+
+const postSchema = z.object({
+  lead_id: z.string().optional(),
+  lead_name: z.string().min(1, 'Nome do lead é obrigatório'),
+  lead_phone: z.string().optional(),
+  scheduled_at: z.string(),
+  notes: z.string().optional(),
+  assigned_to: z.string().optional(),
+});
 
 export async function POST(request: NextRequest) {
   const institutionId = await getInstitutionId(request);
   if (!institutionId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
-  const { lead_id, lead_name, lead_phone, scheduled_at, notes, assigned_to } = body;
+  const body = await request.json().catch(() => ({}));
+  const parseResult = postSchema.safeParse(body);
 
-  if (!lead_name || !scheduled_at) {
-    return NextResponse.json({ error: 'Nome do lead e data são obrigatórios.' }, { status: 400 });
+  if (!parseResult.success) {
+    return NextResponse.json({ error: 'Dados inválidos ou obrigatórios não fornecidos.' }, { status: 400 });
   }
+
+  const { lead_id, lead_name, lead_phone, scheduled_at, notes, assigned_to } = parseResult.data;
 
   const nowBrtObj = new Date(new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'));
   const apptStrObj = new Date(scheduled_at.substring(0, 19));
@@ -81,8 +96,10 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single();
-    
-    if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
+    if (leadError) {
+      console.error('[Visits POST Lead Error]:', leadError.message);
+      return NextResponse.json({ error: 'Erro interno ao criar lead.' }, { status: 500 });
+    }
     targetLeadId = newLead.id;
   }
 
@@ -100,6 +117,9 @@ export async function POST(request: NextRequest) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[Visits POST Error]:', error.message);
+    return NextResponse.json({ error: 'Erro interno ao agendar visita.' }, { status: 500 });
+  }
   return NextResponse.json(data, { status: 201 });
 }

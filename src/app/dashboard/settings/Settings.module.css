@@ -245,3 +245,176 @@
   align-items: center;
   height: 50vh;
 }
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+}
+
+/* Horários & Feriados - Consistência com o Sistema */
+.hoursGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hoursCard {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  backdrop-filter: blur(10px);
+}
+
+.hoursCardInactive {
+  opacity: 0.5;
+}
+
+.dayLabel {
+  width: 140px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.toggleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggleLabel {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 60px;
+}
+
+.customToggle {
+  width: 44px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  position: relative;
+  transition: background var(--transition-fast);
+  border: 1px solid var(--glass-border);
+}
+
+.customToggleActive {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--transition-fast) cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.customToggleActive .toggleThumb {
+  transform: translateX(20px);
+}
+
+.timeInputs {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+.timeSeparator {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.holidayInputGroup {
+  display: flex;
+  gap: 1.5rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: 1.5rem;
+  border-radius: var(--radius-md);
+  align-items: flex-end;
+}
+
+.holidayList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.holidayItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.holidayItem:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.holidayInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.holidayDate {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.holidayReason {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.deleteHolidayBtn {
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  color: var(--accent-danger);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.deleteHolidayBtn:hover {
+  background: var(--accent-danger);
+  color: white;
+  transform: scale(1.1);
+}
+
+@media (max-width: 600px) {
+  .holidayInputGroup {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

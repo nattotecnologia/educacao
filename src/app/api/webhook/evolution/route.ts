@@ -123,7 +123,9 @@ function buildSystemPrompt(
   knowledgeBase: string,
   leadName: string,
   leadPhone: string,
-  institutionName: string
+  institutionName: string,
+  businessHours: any[] = [],
+  closedDays: any[] = []
 ): string {
   // Limpa placeholders comuns no prompt do usuário para evitar que a IA fale "[NOME DA INSTITUIÇÃO]"
   const sanitizedUserPrompt = (userSystemPrompt || '')
@@ -176,6 +178,21 @@ function buildSystemPrompt(
     '⚠️ DISTINÇÃO CRÍTICA ENTRE VISITA E MATRÍCULA (NUNCA CONFUNDA AS DUAS)',
     '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaço. É ESTRITAMENTE PROIBIDO pedir "nome completo", "telefone", "nome da criança", "idade" ou "qual curso" ao agendar uma visita. Você só precisa da DATA e HORA. SE VOCÊ PEDIR O NOME DA CRIANÇA PARA UMA VISITA, ISSO É UM ERRO GRAVE.',
     '- FAZER MATRÍCULA: O aluno vai efetivar a compra/matrícula no curso. SÓ NESTE CASO você exige nome completo do aluno, e-mail e turma.',
+    '',
+    '⚠️ REGRAS DE AGENDAMENTO E HORÁRIO DE FUNCIONAMENTO',
+    'Antes de agendar qualquer visita, VOCÊ DEVE VERIFICAR se a instituição estará aberta na data e hora solicitadas.',
+    '## HORÁRIO PADRÃO:',
+    (businessHours && businessHours.length > 0) 
+      ? businessHours.map(bh => `- ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][bh.day]}: ${bh.isOpen ? `das ${bh.open} às ${bh.close}` : 'FECHADO'}`).join('\n')
+      : '- (Horários não configurados)',
+    '## FERIADOS E EXCEÇÕES (DIAS FECHADOS):',
+    (closedDays && closedDays.length > 0)
+      ? closedDays.map(cd => `- ${cd.date.split('-').reverse().join('/')}: FECHADO (${cd.reason})`).join('\n')
+      : '- Nenhum feriado cadastrado',
+    '',
+    '- IMPORTANTE: Se o usuário pedir um horário em um dia FECHADO na semana, informe amigavelmente que a instituição não abre nesse dia e sugira outro dia.',
+    '- IMPORTANTE: Se o usuário pedir uma data que está na lista de FERIADOS, avise o motivo exato (ex: "estaremos fechados por conta do Feriado...") e sugira outra data.',
+    '- IMPORTANTE: Se o horário pedido estiver fora da faixa de horário de funcionamento, avise e sugira um horário válido.',
     '',
     '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
     '- É ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faça as perguntas de forma natural.',
@@ -942,7 +959,9 @@ export async function POST(request: NextRequest) {
       knowledgeText,
       lead.name || 'Lead WhatsApp',
       phoneNumber,
-      institution.name
+      institution.name,
+      institution.business_hours,
+      institution.closed_days
     );
 
     const model: string = agent.ai_model_override || institution.ai_model || 'gpt-4o';

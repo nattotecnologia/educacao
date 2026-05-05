@@ -70,6 +70,8 @@ export async function updateInstitutionSettings(data: any) {
         ai_base_url: data.ai_base_url,
         evolution_instance_name: data.evolution_instance_name,
         evolution_api_key: data.evolution_api_key ? encrypt(data.evolution_api_key) : null,
+        business_hours: data.business_hours,
+        closed_days: data.closed_days,
       })
       .eq('id', profile.institution_id);
 

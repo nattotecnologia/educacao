@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { 
   Globe, Loader2, Save, 
-  Palette, Upload, Moon, Sun 
+  Palette, Upload, Moon, Sun,
+  Clock, Calendar, Trash2, Plus
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -17,7 +18,7 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'geral' | 'whitelabel'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'horarios' | 'whitelabel'>('geral');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -32,7 +33,21 @@ export default function SettingsPage() {
           getInstitutionSettings(),
           getPlatformSettings(),
         ]);
-        if (instData) setInstitution(instData);
+        if (instData) {
+          setInstitution({
+            ...instData,
+            business_hours: instData.business_hours || [
+              {"day": 0, "isOpen": false, "open": "08:00", "close": "18:00"},
+              {"day": 1, "isOpen": true,  "open": "08:00", "close": "18:00"},
+              {"day": 2, "isOpen": true,  "open": "08:00", "close": "18:00"},
+              {"day": 3, "isOpen": true,  "open": "08:00", "close": "18:00"},
+              {"day": 4, "isOpen": true,  "open": "08:00", "close": "18:00"},
+              {"day": 5, "isOpen": true,  "open": "08:00", "close": "18:00"},
+              {"day": 6, "isOpen": false, "open": "08:00", "close": "12:00"}
+            ],
+            closed_days: instData.closed_days || []
+          });
+        }
         if (platData) {
           setPlatform(platData);
           document.documentElement.style.setProperty('--accent-primary', platData.primary_color || '#3b82f6');
@@ -120,6 +135,9 @@ export default function SettingsPage() {
       <nav className={styles.sidebarNav}>
         <button type="button" onClick={() => setActiveTab('geral')} className={`${styles.navButton} ${activeTab === 'geral' ? styles.navButtonActive : ''}`}>
           <Globe size={18} /> Instituição
+        </button>
+        <button type="button" onClick={() => setActiveTab('horarios')} className={`${styles.navButton} ${activeTab === 'horarios' ? styles.navButtonActive : ''}`}>
+          <Clock size={18} /> Horários
         </button>
         <button type="button" onClick={() => setActiveTab('whitelabel')} className={`${styles.navButton} ${activeTab === 'whitelabel' ? styles.navButtonActive : ''}`}>
           <Palette size={18} /> Personalização
@@ -240,6 +258,141 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'horarios' && (
+          <section className={styles.section}>
+            <header className={styles.sectionHeader}>
+              <div>
+                <h2>Horário de Funcionamento</h2>
+                <p>Configure os dias e horários que o agente IA considerará como abertos.</p>
+              </div>
+            </header>
+            
+            <div className={styles.hoursGrid}>
+               {institution.business_hours?.map((bh: any, idx: number) => {
+                 const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                 return (
+                   <div 
+                     key={idx} 
+                     className={`${styles.hoursCard} ${!bh.isOpen ? styles.hoursCardInactive : ''}`}
+                   >
+                      <div className={styles.dayLabel}>{days[bh.day]}</div>
+                      
+                      <div 
+                        className={styles.toggleWrapper}
+                        onClick={() => {
+                          const newHours = [...institution.business_hours];
+                          newHours[idx].isOpen = !bh.isOpen;
+                          setInstitution({...institution, business_hours: newHours});
+                        }}
+                      >
+                        <div className={`${styles.customToggle} ${bh.isOpen ? styles.customToggleActive : ''}`}>
+                          <div className={styles.toggleThumb} />
+                        </div>
+                        <span className={styles.toggleLabel}>
+                          {bh.isOpen ? 'Aberto' : 'Fechado'}
+                        </span>
+                      </div>
+
+                      {bh.isOpen && (
+                        <div className={styles.timeInputs}>
+                          <input 
+                            type="time" 
+                            value={bh.open} 
+                            onChange={(e) => {
+                              const newHours = [...institution.business_hours];
+                              newHours[idx].open = e.target.value;
+                              setInstitution({...institution, business_hours: newHours});
+                            }}
+                            className={styles.input}
+                            style={{ width: '120px' }}
+                          />
+                          <span className={styles.timeSeparator}>às</span>
+                          <input 
+                            type="time" 
+                            value={bh.close} 
+                            onChange={(e) => {
+                              const newHours = [...institution.business_hours];
+                              newHours[idx].close = e.target.value;
+                              setInstitution({...institution, business_hours: newHours});
+                            }}
+                            className={styles.input}
+                            style={{ width: '120px' }}
+                          />
+                        </div>
+                      )}
+                   </div>
+                 )
+               })}
+            </div>
+
+            <header className={styles.sectionHeader} style={{ marginTop: '3rem' }}>
+              <div>
+                <h2>Dias Fechados / Feriados</h2>
+                <p>Dias específicos em que a instituição não terá atendimento.</p>
+              </div>
+            </header>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+               <div className={styles.holidayInputGroup}>
+                 <div className={styles.inputGroup} style={{ flex: 1 }}>
+                   <label className={styles.label}>Data</label>
+                   <input type="date" id="newClosedDate" className={styles.input} />
+                 </div>
+                 <div className={styles.inputGroup} style={{ flex: 2 }}>
+                   <label className={styles.label}>Motivo</label>
+                   <input type="text" id="newClosedReason" placeholder="Ex: Feriado Nacional" className={styles.input} />
+                 </div>
+                 <button 
+                   type="button" 
+                   className={styles.primaryBtn} 
+                   style={{ height: '48px' }}
+                   onClick={() => {
+                     const dateEl = document.getElementById('newClosedDate') as HTMLInputElement;
+                     const reasonEl = document.getElementById('newClosedReason') as HTMLInputElement;
+                     if(dateEl.value && reasonEl.value) {
+                       setInstitution({
+                         ...institution, 
+                         closed_days: [...(institution.closed_days || []), { date: dateEl.value, reason: reasonEl.value }]
+                       });
+                       dateEl.value = '';
+                       reasonEl.value = '';
+                     }
+                   }}
+                 >
+                   <Plus size={18} /> Adicionar
+                 </button>
+               </div>
+
+               {institution.closed_days?.length > 0 ? (
+                 <div className={styles.holidayList}>
+                   {institution.closed_days.map((cd: any, idx: number) => (
+                     <div key={idx} className={styles.holidayItem}>
+                        <div className={styles.holidayInfo}>
+                          <span className={styles.holidayDate}>{cd.date.split('-').reverse().join('/')}</span>
+                          <span className={styles.holidayReason}>{cd.reason}</span>
+                        </div>
+                        <button 
+                          type="button" 
+                          className={styles.deleteHolidayBtn}
+                          onClick={() => {
+                            const newClosed = institution.closed_days.filter((_:any, i:number) => i !== idx);
+                            setInstitution({...institution, closed_days: newClosed});
+                          }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                     </div>
+                   ))}
+                 </div>
+               ) : (
+                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                   Nenhum feriado cadastrado.
+                 </p>
+               )}
             </div>
           </section>
         )}

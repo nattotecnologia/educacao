@@ -1,27 +1,42 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { decrypt } from '@/utils/encryption';
+import { z } from 'zod';
 
 const EVO_URL = (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
 const GLOBAL_KEY = process.env.EVOLUTION_GLOBAL_APIKEY || '';
 const INSTANCE_TOKEN = process.env.EVOLUTION_INSTANCE_TOKEN || '';
 const ENV_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || '';
 
-// Helper fetch para a Evolution API
+// Helper fetch para a Evolution API com Timeout
 async function evoFetch(path: string, apiKey: string, options: RequestInit = {}) {
-  const res = await fetch(`${EVO_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': apiKey,
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Evolution API ${res.status}: ${text}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+
+  try {
+    const res = await fetch(`${EVO_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[Evolution API Error] ${res.status}: ${text}`);
+      throw new Error(`Evolution API request failed with status ${res.status}`);
+    }
+    return await res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Evolution API request timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 async function getInstitutionData() {
@@ -47,10 +62,21 @@ async function getInstitutionData() {
   return inst;
 }
 
+const postSchema = z.object({
+  action: z.enum(['create', 'disconnect']),
+  instanceName: z.string().optional(),
+});
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { action } = body;
+    const jsonBody = await req.json().catch(() => ({}));
+    const parseResult = postSchema.safeParse(jsonBody);
+    
+    if (!parseResult.success) {
+      return NextResponse.json({ error: 'Payload inválido' }, { status: 400 });
+    }
+
+    const { action, instanceName: parsedInstanceName } = parseResult.data;
     
     const inst = await getInstitutionData();
     let instKey = '';
@@ -62,7 +88,7 @@ export async function POST(req: NextRequest) {
       }
     }
     const apiKey = instKey || INSTANCE_TOKEN || GLOBAL_KEY;
-    const instanceName = body.instanceName || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
+    const instanceName = parsedInstanceName || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
 
     const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'null';
     console.log(`[Evolution] POST action=${body.action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
@@ -105,14 +131,28 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[Evolution POST Error]:', err.message);
+    return NextResponse.json({ error: 'Erro interno no processamento da ação' }, { status: 500 });
   }
 }
+
+const getSchema = z.object({
+  action: z.enum(['config', 'qr', 'status']),
+  instance: z.string().optional()
+});
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const action = searchParams.get('action');
+    const actionParam = searchParams.get('action');
+    const instanceParam = searchParams.get('instance');
+    
+    const parseResult = getSchema.safeParse({ action: actionParam, instance: instanceParam || undefined });
+    
+    if (!parseResult.success) {
+      return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
+    }
+    const { action, instance: parsedInstance } = parseResult.data;
     
     const inst = await getInstitutionData();
     let instKey = '';
@@ -124,7 +164,7 @@ export async function GET(req: NextRequest) {
       }
     }
     const apiKey = instKey || INSTANCE_TOKEN || GLOBAL_KEY;
-    const instanceName = searchParams.get('instance') || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
+    const instanceName = parsedInstance || inst?.evolution_instance_name || ENV_INSTANCE_NAME;
 
     const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'null';
     console.log(`[Evolution] GET action=${action} | instance=${instanceName} | keySource=${instKey ? 'banco' : INSTANCE_TOKEN ? 'INSTANCE_TOKEN' : 'GLOBAL_KEY'} | key=${maskedKey}`);
@@ -156,7 +196,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[Evolution GET Error]:', err.message);
+    return NextResponse.json({ error: 'Erro interno ao consultar dados da Evolution' }, { status: 500 });
   }
 }
 
