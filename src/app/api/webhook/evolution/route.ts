@@ -1059,7 +1059,13 @@ export async function POST(request: NextRequest) {
     }
     
     if (!apiKey) {
-      console.error('[Webhook] API Key não encontrada para o provedor:', provider);
+      console.error('[Webhook] API Key nao encontrada para o provedor:', provider);
+      await logWebhookError(
+        supabaseAdmin,
+        institution?.id || null,
+        phoneNumber || null,
+        `Chave de API nao encontrada ou falha de descriptografia para o provedor: ${provider}`
+      );
       return NextResponse.json({ success: true, reason: 'no_api_key_for_provider' });
     }
 
@@ -1071,9 +1077,15 @@ export async function POST(request: NextRequest) {
 
     if (!apiKey) {
       console.error('[Webhook] Nenhuma API Key configurada para:', provider);
+      await logWebhookError(
+        supabaseAdmin,
+        institution?.id || null,
+        phoneNumber || null,
+        `Nenhuma API Key configurada para o provedor: ${provider}`
+      );
       const fallback =
         agent.fallback_message ||
-        'Desculpe, estou com dificuldades técnicas. Um atendente irá te ajudar em breve.';
+        'Desculpe, estou com dificuldades tecnicas. Um atendente ira te ajudar em breve.';
       await sendEvolutionMessage(evoUrl, evoKey, instanceName, phoneNumber, fallback, false, 800);
       return NextResponse.json({ success: true, reason: 'no_api_key' });
     }
