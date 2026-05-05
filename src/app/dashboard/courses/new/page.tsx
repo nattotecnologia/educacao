@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, BookOpen, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, BookOpen, Save, Sparkles } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 const MODALITY_OPTIONS = [
@@ -25,6 +25,31 @@ export default function NewCoursePage() {
   });
 
   const set = (key: string, val: any) => setForm(prev => ({ ...prev, [key]: val }));
+
+  const [generating, setGenerating] = useState(false);
+
+  const generateWithAI = async () => {
+    if (!form.name) {
+      setError('Preencha o nome do curso para gerar a descrição com IA.');
+      return;
+    }
+    setGenerating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ai/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, modality: form.modality })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      set('description', data.description);
+    } catch (err: any) {
+      setError(err.message || 'Falha ao gerar descrição com IA.');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +118,34 @@ export default function NewCoursePage() {
           </div>
 
           <div>
-            <label style={lbl}>Descrição</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ ...lbl, marginBottom: 0 }}>Descrição</label>
+              <button
+                type="button"
+                onClick={generateWithAI}
+                disabled={generating}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '6px',
+                  color: '#818cf8',
+                  padding: '0.25rem 0.6rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  userSelect: 'none'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)'; }}
+              >
+                {generating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                {generating ? 'Gerando...' : 'Gerar com IA'}
+              </button>
+            </div>
             <textarea id="course-description" style={{ ...inp, resize: 'vertical', fontFamily: 'inherit', lineHeight: '1.6' }} rows={3} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Descreva o curso brevemente..." />
           </div>
 

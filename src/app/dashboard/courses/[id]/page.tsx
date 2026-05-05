@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, Users, Calendar, BookOpen, Edit2, X, Save, MapPin, Monitor, GraduationCap, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Users, Calendar, BookOpen, Edit2, X, Save, MapPin, Monitor, GraduationCap, Trash2, Sparkles } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 interface ClassItem {
@@ -64,6 +64,31 @@ export default function CourseDetailPage() {
   // Estados para edição do curso
   const [isEditingCourse, setIsEditingCourse] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const generateWithAI = async () => {
+    if (!courseForm.name) {
+      setError('Preencha o nome do curso para gerar a descrição com IA.');
+      return;
+    }
+    setGenerating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ai/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: courseForm.name, modality: courseForm.modality })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCourseForm(prev => ({ ...prev, description: data.description }));
+    } catch (err: any) {
+      setError(err.message || 'Falha ao gerar descrição com IA.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const [courseForm, setCourseForm] = useState({
     name: '',
     description: '',
@@ -295,7 +320,34 @@ export default function CourseDetailPage() {
               </div>
               
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={lbl}>Descrição Detalhada</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ ...lbl, marginBottom: 0 }}>Descrição Detalhada</label>
+                  <button
+                    type="button"
+                    onClick={generateWithAI}
+                    disabled={generating}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                      borderRadius: '6px',
+                      color: '#818cf8',
+                      padding: '0.25rem 0.6rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      userSelect: 'none'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)'; }}
+                  >
+                    {generating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                    {generating ? 'Gerando...' : 'Gerar com IA'}
+                  </button>
+                </div>
                 <textarea 
                   style={{ ...inp, minHeight: '100px', resize: 'vertical', lineHeight: '1.5' }} 
                   value={courseForm.description} 
