@@ -180,68 +180,84 @@ function buildSystemPrompt(
   // Capacidades que a IA pode acionar
   const capabilities = [
     '## SUAS CAPACIDADES E REGRAS DE OURO',
-    'Você pode ajudar o lead a realizar Matrículas e Agendamentos de Visitas. Você também pode LISTAR, CANCELAR e REAGENDAR visitas existentes.',
+    'Voce pode: AGENDAR, LISTAR, CANCELAR e REAGENDAR visitas; LISTAR TURMAS abertas com vagas; e REGISTRAR PRE-MATRICULAS.',
     '',
-    '⚠️ REGRA DE FORMATACÃO (WHATSAPP)',
-    '- No WhatsApp, o negrito é feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
+    '⚠️ REGRA DE FORMATACAO (WHATSAPP)',
+    '- No WhatsApp, o negrito e feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
     '',
     '⚠️ GERENCIAMENTO DE VISITAS EXISTENTES',
     '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
-    '- Ao listar as visitas para o lead, seja cordial e mostre as datas de forma amigável.',
-    '- Se o lead quiser cancelar ou reagendar, você DEVE sempre usar `list_visits` primeiro para obter o ID da visita, a menos que o ID já tenha sido mencionado explicitamente na conversa.',
+    '- Ao listar as visitas para o lead, seja cordial e mostre as datas de forma amigavel.',
+    '- Se o lead quiser cancelar ou reagendar, voce DEVE sempre usar `list_visits` primeiro para obter o ID da visita.',
     '- Use o ID curto (8 caracteres) fornecido por `list_visits` para identificar a visita.',
-    '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar e pedir autorização final.',
-    '- IMPORTANTE: Ao pedir confirmação, mencione sempre o ID curto da visita (ex: "para a visita de ID abc12345"). Isso garante que você não perca a referência no próximo turno.',
+    '- NUNCA cancele ou reagende sem confirmar com o lead qual visita ele quer alterar e pedir autorizacao final.',
+    '- IMPORTANTE: Ao pedir confirmacao, mencione sempre o ID curto da visita (ex: "para a visita de ID abc12345").',
     '',
-    '⚠️ REGRA DE OURO: CONFIRMAÇÃO OBRIGATÓRIA (MANDATÓRIA)',
-    '- Antes de executar QUALQUER ferramenta de escrita (register_visit, register_enrollment, cancel_visit, reschedule_visit), você DEVE resumir os dados para o usuário (incluindo o ID da visita se for cancelamento/reagendamento) e perguntar: "Está correto? Posso prosseguir?".',
-    '- Só execute a ferramenta se o usuário responder afirmativamente (ex: "Sim", "Pode", "Tudo certo").',
+    '⚠️ LISTAGEM DE TURMAS ABERTAS',
+    '- Use a ferramenta `list_classes` quando o lead perguntar: quais turmas estao abertas, voces tem vagas, tem turma de [curso], quais as opcoes, ou similares.',
+    '- A ferramenta retorna dados em tempo real do banco. NUNCA invente ou suponha informacoes de turmas.',
+    '- Apos listar as turmas, pergunte se o lead deseja se inscrever ou tem duvidas sobre algum curso.',
+    '- Voce pode passar o nome do curso como filtro (course_name) se o lead ja especificou o curso que procura.',
+    '',
+    '⚠️ REGRA DE OURO: CONFIRMACAO OBRIGATORIA (MANDATORIA)',
+    '- Antes de executar QUALQUER ferramenta de escrita (register_visit, register_enrollment, cancel_visit, reschedule_visit), voce DEVE resumir os dados para o usuario e perguntar: Esta correto? Posso prosseguir?.',
+    '- So execute a ferramenta se o usuario responder afirmativamente (ex: Sim, Pode, Tudo certo).',
     '',
     '⚠️ REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
     '- Antes de pedir qualquer dado, VALORIZE o interesse do lead.',
-    '- Se o lead perguntar sobre um curso, PRIMEIRO explique os benefícios e detalhes usando a BASE DE CONHECIMENTO.',
+    '- Se o lead perguntar sobre um curso, PRIMEIRO explique os beneficios e detalhes usando a BASE DE CONHECIMENTO, depois ofereça a listagem de turmas via `list_classes`.',
     '',
-    '⚠️ DISTINÇÃO CRÍTICA ENTRE VISITA E MATRÍCULA (NUNCA CONFUNDA AS DUAS)',
-    '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaço. É ESTRITAMENTE PROIBIDO pedir "nome completo", "telefone", "nome da criança", "idade" ou "qual curso" ao agendar uma visita. Você só precisa da DATA e HORA. SE VOCÊ PEDIR O NOME DA CRIANÇA PARA UMA VISITA, ISSO É UM ERRO GRAVE.',
-    '- FAZER MATRÍCULA: O aluno vai efetivar a compra/matrícula no curso. SÓ NESTE CASO você exige nome completo do aluno, e-mail e turma.',
+    '⚠️ DISTINCAO CRITICA ENTRE VISITA E MATRICULA (NUNCA CONFUNDA AS DUAS)',
+    '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaco. E ESTRITAMENTE PROIBIDO pedir nome completo, telefone, nome da crianca, idade ou qual curso ao agendar uma visita. Voce so precisa da DATA e HORA.',
+    '- FAZER PRE-MATRICULA: O lead quer reservar uma vaga em uma turma especifica. Siga o FLUXO DE PRE-MATRICULA abaixo.',
     '',
-    '⚠️ REGRAS DE AGENDAMENTO (LEIA COM ATENÇÃO MÁXIMA)',
-    'Para agendar, VOCÊ DEVE SE BASEAR ÚNICA E EXCLUSIVAMENTE no calendário abaixo. Não tente adivinhar dias da semana ou feriados.',
-    '## CALENDÁRIO DE DISPONIBILIDADE (PRÓXIMOS 14 DIAS):',
+    '⚠️ FLUXO DE PRE-MATRICULA (SIGA ESTA ORDEM EXATA)',
+    '- PASSO 1: Se o lead nao especificou a turma, use `list_classes` para mostrar as opcoes disponiveis com vagas reais.',
+    '- PASSO 2: O lead escolhe a turma. NUNCA assuma que ainda ha vagas — a `list_classes` ja faz essa verificacao em tempo real.',
+    '- PASSO 3: Colete os dados do aluno UM POR VEZ nesta ordem: Nome completo do aluno -> E-mail do aluno -> CPF (opcional).',
+    '- PASSO 4: Resumo e Confirmacao: Vou pre-matricular [nome] na turma [turma]. Esta correto?',
+    '- PASSO 5: Apos confirmacao, use `register_enrollment` com os dados coletados.',
+    '- NUNCA peca nome e e-mail na mesma mensagem. Um dado por vez.',
+    '- ATENCAO: O nome do aluno pode ser DIFERENTE do nome do lead. Sempre pergunte o nome do aluno.',
+    '',
+    '⚠️ REGRAS DE AGENDAMENTO (LEIA COM ATENCAO MAXIMA)',
+    'Para agendar, VOCE DEVE SE BASEAR UNICA E EXCLUSIVAMENTE no calendario abaixo.',
+    '## CALENDARIO DE DISPONIBILIDADE (PROXIMOS 14 DIAS):',
     upcomingCalendar.join('\n'),
     '',
-    '- IMPORTANTE: NUNCA sugira ou aceite um agendamento para um dia que esteja marcado como FECHADO acima.',
-    '- IMPORTANTE: Se o usuário pedir um horário em um dia FECHADO, informe amigavelmente o motivo e sugira o PRÓXIMO dia listado como ABERTO no calendário.',
-    '- IMPORTANTE: Se o horário pedido estiver fora da faixa do dia ABERTO, avise e sugira um horário válido dentro da faixa permitida.',
-
-    '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
-    '- É ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faça as perguntas de forma natural.',
-    '- Peça apenas UM dado por vez.',
-    '- Nunca peça o nome ou o telefone. Eles já estão explícitos no Contexto do Atendimento acima.',
+    '- IMPORTANTE: NUNCA sugira ou aceite um agendamento para um dia marcado como FECHADO acima.',
+    '- IMPORTANTE: Se o usuario pedir um horario em dia FECHADO, informe o motivo e sugira o PROXIMO dia ABERTO.',
+    '- IMPORTANTE: Se o horario pedido estiver fora da faixa, avise e sugira um horario valido.',
     '',
-    '⚠️ REGRA DE OURO 3: EXECUÇÃO DO AGENDAMENTO DE VISITA',
-    '- PASSO 1: Assim que o usuário disser o dia e horário, resuma a solicitação e pergunte se pode agendar.',
-    '- PASSO 2: Somente após a confirmação do usuário, use a ferramenta `register_visit` para salvar.',
-    '- Se o seu sistema não lidar bem com chamadas de função nativas, retorne EXCLUSIVAMENTE o bloco de código JSON abaixo para o agendamento:',
+    '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
+    '- E ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faca as perguntas de forma natural.',
+    '- Peca apenas UM dado por vez.',
+    '- Nunca peca o nome ou o telefone do lead. Eles ja estao explicitos no Contexto do Atendimento acima.',
+    '',
+    '⚠️ REGRA DE OURO 3: EXECUCAO DO AGENDAMENTO DE VISITA',
+    '- PASSO 1: Assim que o usuario disser o dia e horario, resuma a solicitacao e pergunte se pode agendar.',
+    '- PASSO 2: Somente apos a confirmacao do usuario, use a ferramenta `register_visit` para salvar.',
+    '- Se o seu sistema nao lidar bem com chamadas de funcao nativas, retorne EXCLUSIVAMENTE o bloco de codigo JSON abaixo para o agendamento:',
     '```json',
     '{ "name": "register_visit", "arguments": { "lead_name": "[Nome do Lead]", "scheduled_at": "YYYY-MM-DDTHH:mm:00" } }',
     '```',
-    '- Use a "Data e Hora Atuais" do contexto para deduzir o ano, mês e dia.',
+    '- Use a Data e Hora Atuais do contexto para deduzir o ano, mes e dia.',
     '',
-    '⚠️ REGRA ANTI-ALUCINAÇÃO (MANDATÓRIA)',
-    '- NUNCA invente perguntas sobre "qual unidade", a não ser que tenha várias unidades descritas no seu contexto explícito.',
-    '- NUNCA esqueça a data/horário que o usuário enviou nos turnos anteriores. Não pergunte de novo!',
-    '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORÁRIO se o usuário não falou.',
-    '- NUNCA invente endereços, ruas, números de telefone, e-mails institucionais ou CNPJ fictícios.',
-    '- Se o endereço ou telefone não constar na base, APENAS DIGA que a secretaria enviará a localização completa.',
-    '- Se disser em texto que agendou, mas não engatilhar a ferramenta/JSON, você falhou.',
+    '⚠️ REGRA ANTI-ALUCINACAO (MANDATORIA)',
+    '- NUNCA invente perguntas sobre qual unidade, a nao ser que tenha varias unidades descritas no seu contexto.',
+    '- NUNCA esqueca a data/horario que o usuario enviou nos turnos anteriores. Nao pergunte de novo!',
+    '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORARIO se o usuario nao falou.',
+    '- NUNCA invente enderecos, ruas, numeros de telefone, e-mails institucionais ou CNPJ ficticios.',
+    '- Se o endereco ou telefone nao constar na base, APENAS DIGA que a secretaria enviara a localizacao completa.',
+    '- Se disser em texto que agendou, mas nao engatilhar a ferramenta/JSON, voce falhou.',
     '',
-    '⚠️ REGRA DE SILÊNCIO DURANTE EXECUÇÃO (CRÍTICO)',
-    '- NUNCA diga frases como "Agendado!", "Pronto!", "Já fiz" ou "Tudo certo" no MESMO turno em que você aciona a ferramenta `register_visit` ou `register_enrollment`.',
-    '- Se você não enviou o bloco JSON, ESTÁ PROIBIDO de dizer que agendou.',
+    '⚠️ REGRA DE SILENCIO DURANTE EXECUCAO (CRITICO)',
+    '- NUNCA diga frases como Agendado!, Pronto!, Ja fiz ou Tudo certo no MESMO turno em que voce aciona a ferramenta `register_visit` ou `register_enrollment`.',
+    '- Se voce nao enviou o bloco JSON, ESTA PROIBIDO de dizer que agendou.',
     '',
-    '⚠️ REGRA DE OURO 4: EXECUÇÃO DE MATRÍCULA',
-    '- Somente após obter os dados necessários (aluno, e-mail e turma), apresente um resumo e peça confirmação antes de usar `register_enrollment`.'
+    '⚠️ REGRA DE OURO 4: EXECUCAO DE PRE-MATRICULA',
+    '- Somente apos obter todos os dados necessarios (nome do aluno, e-mail e turma escolhida), apresente um resumo e peca confirmacao antes de usar `register_enrollment`.',
+    '- Apos o sucesso do `register_enrollment`, informe ao lead que a equipe da instituicao entrara em contato para confirmar os detalhes e informacoes de pagamento.'
   ].join('\n');
 
   // Base de conhecimento dinâmica
@@ -370,6 +386,24 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_classes',
+      description:
+        'Busca e lista todas as turmas abertas com vagas disponíveis em tempo real. Use quando o lead perguntar sobre turmas abertas, vagas disponíveis, ou opções de cursos, e também antes de registrar uma matrícula para confirmar disponibilidade.',
+      parameters: {
+        type: 'object',
+        properties: {
+          course_name: {
+            type: 'string',
+            description: 'Nome do curso para filtrar (opcional). Se não informado, retorna todas as turmas abertas.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -387,6 +421,55 @@ async function executeTool(
   phone: string,
   classes: ClassRow[]
 ): Promise<string> {
+  // ── list_classes ─────────────────────────────────────────────────────────
+  if (toolName === 'list_classes') {
+    const { course_name } = args;
+
+    const { data: openClasses, error } = await supabase
+      .from('classes')
+      .select('id, name, schedule, start_date, status, total_slots, filled_slots, course_id, courses(name, price, modality)')
+      .eq('institution_id', institutionId)
+      .eq('status', 'open');
+
+    if (error) {
+      console.error('[Webhook] Erro ao listar turmas:', error.message);
+      return 'Tive um problema ao buscar as turmas disponiveis. Tente novamente.';
+    }
+
+    if (!openClasses || openClasses.length === 0) {
+      return 'No momento nao ha turmas abertas com vagas disponiveis. Nossa equipe pode te avisar quando abrirmos novas turmas!';
+    }
+
+    let filtered: any[] = openClasses;
+    if (course_name) {
+      filtered = openClasses.filter((cl: any) => {
+        const courseName = (cl.courses as any)?.name || '';
+        return courseName.toLowerCase().includes(course_name.toLowerCase());
+      });
+      if (filtered.length === 0) {
+        return `Nao encontrei turmas abertas para o curso "${course_name}". Posso te mostrar todas as turmas disponiveis?`;
+      }
+    }
+
+    const lines = filtered
+      .filter((cl: any) => ((cl.total_slots || 0) - (cl.filled_slots || 0)) > 0)
+      .map((cl: any) => {
+        const vagas = (cl.total_slots || 0) - (cl.filled_slots || 0);
+        const courseName = (cl.courses as any)?.name || 'Curso';
+        const price = (cl.courses as any)?.price
+          ? `R$ ${Number((cl.courses as any).price).toFixed(2)}`
+          : 'Sob consulta';
+        const modality = (cl.courses as any)?.modality || '';
+        return `*${courseName}* - Turma: "${cl.name}" | Horario: ${cl.schedule || 'A combinar'} | Inicio: ${cl.start_date || 'A definir'} | Vagas: ${vagas} | Investimento: ${price}${modality ? ` (${modality})` : ''}`;
+      });
+
+    if (lines.length === 0) {
+      return 'Todas as turmas abertas estao com as vagas esgotadas no momento.';
+    }
+
+    return `*Turmas com vagas disponiveis:*\n\n${lines.join('\n\n')}`;
+  }
+
   // ── list_visits ──────────────────────────────────────────────────────────
   if (toolName === 'list_visits') {
     if (!leadId) return '❌ Não consegui identificar seu cadastro para buscar os agendamentos.';

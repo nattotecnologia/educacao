@@ -29,12 +29,14 @@ interface Stats {
   activeAgents: number;
   weeklyChart: { name: string; ai: number; human: number }[];
   recentLeads: any[];
+  heatmapData: number[];
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [userName, setUserName] = useState('');
 
   const fetchStats = useCallback(async () => {
     try {
@@ -42,8 +44,11 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('id', user.id).single();
+      const { data: profile } = await supabase.from('profiles').select('institution_id, full_name').eq('id', user.id).single();
       
+      if (profile?.full_name) {
+        setUserName(profile.full_name);
+      }
       if (!profile?.institution_id) {
         setError('Nenhuma instituição vinculada. Acesse as Configurações.');
         setLoading(false);
@@ -126,11 +131,16 @@ export default function Dashboard() {
 
   const aiAutonomyPct = stats.total > 0 ? Math.round((stats.aiHandling / stats.total) * 100) : 0;
 
+  const hour = new Date().getHours();
+  const greetingTime = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const firstName = userName ? userName.split(' ')[0] : 'Equipe';
+  const greeting = `${greetingTime}, ${firstName}!`;
+
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Visão Geral</h1>
-        <p className={styles.subtitle}>Acompanhe a performance da IA e do time comercial em tempo real.</p>
+        <h1 className={styles.title}>{greeting}</h1>
+        <p className={styles.subtitle}>Visão geral e performance comercial em tempo real.</p>
       </div>
 
       {/* Cards de Métricas */}
@@ -190,6 +200,45 @@ export default function Dashboard() {
               <TrendingUp size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
               <p>Sem capturas nos últimos 7 dias. Os dados aparecerão aqui quando leads chegarem pelo WhatsApp.</p>
             </div>
+          )}
+        </div>
+
+        {/* Mapa de Calor de Visitas */}
+        <div className="card">
+          <h3 className={styles.chartTitle}>Dias Mais Movimentados (Visitas)</h3>
+          {stats.heatmapData && Math.max(...stats.heatmapData) > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => {
+                  const val = stats.heatmapData[i];
+                  const max = Math.max(...stats.heatmapData);
+                  const intensity = val > 0 ? 0.2 + (val / max) * 0.8 : 0.05;
+                  
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
+                      <div 
+                        style={{ 
+                          width: '100%', 
+                          aspectRatio: '1/1', 
+                          borderRadius: 'var(--radius-sm)', 
+                          backgroundColor: 'var(--accent-primary)', 
+                          opacity: intensity,
+                          transition: 'opacity 0.3s'
+                        }}
+                        title={`${val} visitas`}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{day}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Baseado no histórico total de agendamentos</p>
+            </div>
+          ) : (
+             <div className={styles.emptyChart}>
+               <Activity size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
+               <p>Sem dados suficientes para o mapa de calor.</p>
+             </div>
           )}
         </div>
 

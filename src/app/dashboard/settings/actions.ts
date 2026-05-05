@@ -61,6 +61,7 @@ export async function updateInstitutionSettings(data: any) {
       .from('institutions')
       .update({
         name: data.name,
+        about: data.about,
         ai_provider: data.ai_provider,
         ai_api_key: data.ai_api_key ? encrypt(data.ai_api_key) : null,
         openai_key: data.openai_key ? encrypt(data.openai_key) : null,

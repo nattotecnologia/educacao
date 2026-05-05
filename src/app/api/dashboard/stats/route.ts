@@ -77,6 +77,22 @@ export async function GET(request: Request) {
     // Últimos 5 leads para o feed
     const recentLeads = allLeads.slice(0, 5);
 
+    // Busca todas as visitas para o Heatmap
+    const { data: visits } = await supabaseAdmin
+      .from('visit_appointments')
+      .select('scheduled_at')
+      .eq('institution_id', institutionId);
+
+    const heatmapData = [0, 0, 0, 0, 0, 0, 0]; // 0=Dom, 6=Sáb
+    if (visits) {
+      visits.forEach(v => {
+        if (v.scheduled_at) {
+          const d = new Date(v.scheduled_at);
+          heatmapData[d.getDay()] += 1;
+        }
+      });
+    }
+
     return NextResponse.json({
       total,
       converted,
@@ -86,6 +102,7 @@ export async function GET(request: Request) {
       activeAgents: activeAgents || 0,
       weeklyChart,
       recentLeads,
+      heatmapData,
     });
   } catch (err: any) {
     console.error('Erro nas stats:', err.message);

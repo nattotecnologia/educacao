@@ -170,6 +170,17 @@ export default function SettingsPage() {
                   className={styles.input} 
                 />
               </div>
+
+              <div className={styles.inputGroup}>
+                <label className={styles.label}>Descrição (Sobre a Instituição)</label>
+                <textarea 
+                  value={institution.about || ''} 
+                  onChange={(e) => setInstitution({...institution, about: e.target.value})}
+                  className={styles.input}
+                  style={{ minHeight: '100px', resize: 'vertical' }}
+                  placeholder="Escreva detalhes sobre a instituição. Essas informações serão usadas pela Inteligência Artificial para responder dúvidas dos leads."
+                />
+              </div>
             </div>
           </section>
         )}
