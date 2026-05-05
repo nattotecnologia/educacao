@@ -151,6 +151,32 @@ function buildSystemPrompt(
     `-> IMPORTANTE: Aja de maneira direta e continuada. NUNCA faça discursos de "Boas-vindas" ou "Como posso ajudar?" no meio de uma conversa. Responda exatamente à intenção do usuário.`
   ].join('\n');
 
+  // Gerador de Calendário Dinâmico (Próximos 14 Dias) para evitar alucinações de data/dia da IA
+  const daysOfWeek = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  const upcomingCalendar = [];
+  
+  for (let i = 0; i <= 14; i++) {
+    const d = new Date();
+    d.setHours(d.getHours() - 3); // Fuso horário do Brasil
+    d.setDate(d.getDate() + i);
+    
+    const dayOfWeekStr = daysOfWeek[d.getDay()];
+    const dateStr = d.toISOString().split('T')[0];
+    const displayDate = dateStr.split('-').reverse().join('/');
+    
+    const closedReason = closedDays?.find(cd => cd.date === dateStr);
+    const bh = businessHours?.find(b => Number(b.day) === d.getDay());
+    const isOpen = bh?.isOpen;
+    
+    if (closedReason) {
+      upcomingCalendar.push(`- ${displayDate} (${dayOfWeekStr}): FECHADO (Feriado: ${closedReason.reason})`);
+    } else if (!isOpen) {
+      upcomingCalendar.push(`- ${displayDate} (${dayOfWeekStr}): FECHADO`);
+    } else {
+      upcomingCalendar.push(`- ${displayDate} (${dayOfWeekStr}): ABERTO (das ${bh.open} às ${bh.close})`);
+    }
+  }
+
   // Capacidades que a IA pode acionar
   const capabilities = [
     '## SUAS CAPACIDADES E REGRAS DE OURO',
@@ -179,21 +205,15 @@ function buildSystemPrompt(
     '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaço. É ESTRITAMENTE PROIBIDO pedir "nome completo", "telefone", "nome da criança", "idade" ou "qual curso" ao agendar uma visita. Você só precisa da DATA e HORA. SE VOCÊ PEDIR O NOME DA CRIANÇA PARA UMA VISITA, ISSO É UM ERRO GRAVE.',
     '- FAZER MATRÍCULA: O aluno vai efetivar a compra/matrícula no curso. SÓ NESTE CASO você exige nome completo do aluno, e-mail e turma.',
     '',
-    '⚠️ REGRAS DE AGENDAMENTO E HORÁRIO DE FUNCIONAMENTO',
-    'Antes de agendar qualquer visita, VOCÊ DEVE VERIFICAR se a instituição estará aberta na data e hora solicitadas.',
-    '## HORÁRIO PADRÃO:',
-    (businessHours && businessHours.length > 0) 
-      ? businessHours.map(bh => `- ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][bh.day]}: ${bh.isOpen ? `das ${bh.open} às ${bh.close}` : 'FECHADO'}`).join('\n')
-      : '- (Horários não configurados)',
-    '## FERIADOS E EXCEÇÕES (DIAS FECHADOS):',
-    (closedDays && closedDays.length > 0)
-      ? closedDays.map(cd => `- ${cd.date.split('-').reverse().join('/')}: FECHADO (${cd.reason})`).join('\n')
-      : '- Nenhum feriado cadastrado',
+    '⚠️ REGRAS DE AGENDAMENTO (LEIA COM ATENÇÃO MÁXIMA)',
+    'Para agendar, VOCÊ DEVE SE BASEAR ÚNICA E EXCLUSIVAMENTE no calendário abaixo. Não tente adivinhar dias da semana ou feriados.',
+    '## CALENDÁRIO DE DISPONIBILIDADE (PRÓXIMOS 14 DIAS):',
+    upcomingCalendar.join('\n'),
     '',
-    '- IMPORTANTE: Se o usuário pedir um horário em um dia FECHADO na semana, informe amigavelmente que a instituição não abre nesse dia e sugira outro dia.',
-    '- IMPORTANTE: Se o usuário pedir uma data que está na lista de FERIADOS, avise o motivo exato (ex: "estaremos fechados por conta do Feriado...") e sugira outra data.',
-    '- IMPORTANTE: Se o horário pedido estiver fora da faixa de horário de funcionamento, avise e sugira um horário válido.',
-    '',
+    '- IMPORTANTE: NUNCA sugira ou aceite um agendamento para um dia que esteja marcado como FECHADO acima.',
+    '- IMPORTANTE: Se o usuário pedir um horário em um dia FECHADO, informe amigavelmente o motivo e sugira o PRÓXIMO dia listado como ABERTO no calendário.',
+    '- IMPORTANTE: Se o horário pedido estiver fora da faixa do dia ABERTO, avise e sugira um horário válido dentro da faixa permitida.',
+
     '⚠️ REGRA DE OURO 2: COLETA INDIVIDUAL E FLUIDA',
     '- É ESTRITAMENTE PROIBIDO usar listas numeradas ("1.", "2.", etc.) ou bullets. Faça as perguntas de forma natural.',
     '- Peça apenas UM dado por vez.',
