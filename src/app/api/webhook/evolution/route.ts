@@ -99,8 +99,8 @@ async function logWebhookError(
 async function fetchKnowledgeBase(
   supabase: SupabaseClient<any, any, any>,
   institutionId: string
-): Promise<{ text: string; courses: Course[]; classes: ClassRow[] }> {
-  const [coursesRes, classesRes] = await Promise.all([
+): Promise<{ text: string; courses: Course[]; classes: ClassRow[]; promotions: any[] }> {
+  const [coursesRes, classesRes, promotionsRes] = await Promise.all([
     supabase
       .from('courses')
       .select('id, name, description, price, modality, duration_hours') // id agora incluído
@@ -111,13 +111,19 @@ async function fetchKnowledgeBase(
       .select('id, name, schedule, start_date, status, course_id, total_slots, filled_slots')
       .eq('institution_id', institutionId)
       .eq('status', 'open'),
+    supabase
+      .from('promotions')
+      .select('*')
+      .eq('institution_id', institutionId)
+      .eq('is_active', true),
   ]);
 
   const courses: Course[] = (coursesRes.data as Course[]) || [];
   const classes: ClassRow[] = (classesRes.data as ClassRow[]) || [];
+  const promotions: any[] = promotionsRes.data || [];
 
-  if (courses.length === 0 && classes.length === 0) {
-    return { text: '', courses, classes };
+  if (courses.length === 0 && classes.length === 0 && promotions.length === 0) {
+    return { text: '', courses, classes, promotions };
   }
 
   const lines: string[] = [
@@ -146,7 +152,18 @@ async function fetchKnowledgeBase(
     lines.push('');
   });
 
-  return { text: lines.join('\n'), courses, classes };
+  if (promotions.length > 0) {
+    lines.push('### PROMOÇÕES E DESCONTOS ATIVOS (Use APENAS estes descontos):');
+    lines.push('');
+    promotions.forEach(p => {
+      const discount = p.discount_percentage ? `${p.discount_percentage}%` : `R$ ${p.discount_value}`;
+      const valid = p.valid_until ? ` (Válido até: ${new Date(p.valid_until).toLocaleDateString('pt-BR')})` : '';
+      lines.push(`🎁 *${p.name}* — ${p.description || ''}. Desconto de ${discount}${valid}`);
+    });
+    lines.push('');
+  }
+
+  return { text: lines.join('\n'), courses, classes, promotions };
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +202,8 @@ function buildSystemPrompt(
     `- Nome do Lead: ${leadName}`,
     `- Telefone: ${leadPhone}`,
     '',
-    `-> IMPORTANTE: Aja de maneira direta e continuada. NUNCA faça discursos de "Boas-vindas" ou "Como posso ajudar?" no meio de uma conversa. Responda exatamente à intenção do usuário.`
+    `-> IMPORTANTE: Aja de maneira direta e continuada. NUNCA faça discursos de "Boas-vindas" ou "Como posso ajudar?" no meio de uma conversa. Responda exatamente à intenção do usuário.`,
+    `-> MÁXIMA ATENÇÃO: NUNCA simule ou responda no lugar do usuário. FAÇA UMA ÚNICA PERGUNTA e PARE IMEDIATAMENTE de gerar texto, aguardando a resposta do usuário. NUNCA envie várias perguntas na mesma mensagem.`
   ].join('\n');
 
   // Gerador de Calendário Dinâmico (Próximos 14 Dias) para evitar alucinações de data/dia da IA
@@ -248,14 +266,21 @@ function buildSystemPrompt(
     '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaco. E ESTRITAMENTE PROIBIDO pedir nome completo, telefone, nome da crianca, idade ou qual curso ao agendar uma visita. Voce so precisa da DATA e HORA.',
     '- FAZER PRE-MATRICULA: O lead quer reservar uma vaga em uma turma especifica. Siga o FLUXO DE PRE-MATRICULA abaixo.',
     '',
-    'FLUXO DE PRE-MATRICULA (SIGA ESTA ORDEM EXATA)',
+    'FLUXO DE PRE-MATRICULA (SIGA ESTA ORDEM EXATA E NUNCA PULE PASSOS)',
     '- PASSO 1: Se o lead nao especificou a turma, use `list_classes` para mostrar as opcoes disponiveis com vagas reais.',
-    '- PASSO 2: O lead escolhe a turma. NUNCA assuma que ainda ha vagas — a `list_classes` ja faz essa verificacao em tempo real.',
-    '- PASSO 3: Colete os dados do aluno UM POR VEZ nesta ordem: Nome completo do aluno -> E-mail do aluno -> CPF (opcional).',
-    '- PASSO 4: Resumo e Confirmacao: Vou pre-matricular [nome] na turma [turma]. Esta correto?',
-    '- PASSO 5: Apos confirmacao, use `register_enrollment` com os dados coletados.',
-    '- NUNCA peca nome e e-mail na mesma mensagem. Um dado por vez.',
+    '- PASSO 2: O lead escolhe a turma.',
+    '- PASSO 3: Pergunte APENAS o nome completo do aluno e PARE DE ESCREVER. Aguarde a resposta do lead.',
+    '- PASSO 4: APÓS o lead responder o nome, pergunte APENAS o e-mail do aluno e PARE DE ESCREVER. Aguarde a resposta.',
+    '- PASSO 5: APÓS o lead responder o e-mail, pergunte APENAS o CPF (opcional) e PARE DE ESCREVER. Aguarde a resposta.',
+    '- PASSO 6: Resumo e Confirmacao: Vou pre-matricular [nome] na turma [turma]. Esta correto?',
+    '- PASSO 7: Apos confirmacao, use `register_enrollment` com os dados coletados.',
+    '- PROIBIÇÃO ABSOLUTA: Você ESTÁ PROIBIDO de pedir mais de uma informação na mesma mensagem (ex: nome e e-mail). Faça apenas UMA pergunta por mensagem e pare.',
     '- ATENCAO: O nome do aluno pode ser DIFERENTE do nome do lead. Sempre pergunte o nome do aluno.',
+    '',
+    'GERENCIAMENTO DE PRE-MATRICULAS',
+    '- Se o lead perguntar quais as matrículas dele, use `list_enrollments`.',
+    '- Se o lead quiser CANCELAR uma matrícula (pre-matrícula), use PRIMEIRO `list_enrollments` para ver as matrículas.',
+    '- Em seguida, peça para confirmar e use a ferramenta `cancel_enrollment` passando o ID da matrícula.',
     '',
     'REGRAS DE AGENDAMENTO (LEIA COM ATENCAO MAXIMA)',
     'Para agendar, VOCE DEVE SE BASEAR UNICA E EXCLUSIVAMENTE no calendario abaixo.',
@@ -280,7 +305,9 @@ function buildSystemPrompt(
     '```',
     '- Use a Data e Hora Atuais do contexto para deduzir o ano, mes e dia.',
     '',
-    'REGRA ANTI-ALUCINACAO (MANDATORIA)',
+    'REGRA ANTI-ALUCINACAO E FLUXO (MANDATORIA)',
+    '- PARE DE ESCREVER APÓS QUALQUER PERGUNTA. Nunca assuma a resposta do usuário.',
+    '- NUNCA ofereça descontos, campanhas ou promoções que não estejam listados na BASE DE CONHECIMENTO. Se não houver promoções listadas, diga que não há descontos disponíveis no momento.',
     '- NUNCA invente perguntas sobre qual unidade, a nao ser que tenha varias unidades descritas no seu contexto.',
     '- NUNCA esqueca a data/horario que o usuario enviou nos turnos anteriores. Nao pergunte de novo!',
     '- NUNCA INVENTE, ADIVINHE OU ASSUMA UMA DATA OU HORARIO se o usuario nao falou.',
@@ -456,6 +483,21 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'cancel_enrollment',
+      description:
+        'Cancela uma pre-matricula do aluno. Use SOMENTE apos o lead confirmar explicitamente que deseja cancelar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          enrollment_id: { type: 'string', description: 'ID da matricula a cancelar (obtido via list_enrollments)' },
+        },
+        required: ['enrollment_id'],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -526,10 +568,38 @@ async function executeTool(
       const statusLabel = statusLabels[e.status] || e.status;
       const className = e.classes?.name || 'Turma';
       const courseName = (e.classes?.courses as any)?.name || 'Curso';
-      return `• Aluno: *${e.student_name}*\n  Curso: ${courseName} (Turma: "${className}")\n  Status: ${statusLabel}`;
+      return `• Aluno: *${e.student_name}*\n  ID: ${e.id}\n  Curso: ${courseName} (Turma: "${className}")\n  Status: ${statusLabel}`;
     });
 
     return `🎓 Suas pré-matrículas registradas:\n\n${lines.join('\n\n')}`;
+  }
+
+  // ── cancel_enrollment ────────────────────────────────────────────────────
+  if (toolName === 'cancel_enrollment') {
+    const { enrollment_id } = args;
+    if (!enrollment_id) return '❌ Preciso do ID da matrícula para cancelar.';
+
+    const { data: enroll, error: findErr } = await supabase
+      .from('enrollments')
+      .select('id, student_name, status')
+      .eq('institution_id', institutionId)
+      .eq('id', enrollment_id)
+      .single();
+
+    if (findErr || !enroll) return '❌ Matrícula não encontrada. Verifique o ID fornecido.';
+    if (enroll.status === 'cancelled') return 'ℹ️ Esta matrícula já estava cancelada.';
+
+    const { error } = await supabase
+      .from('enrollments')
+      .update({ status: 'cancelled' })
+      .eq('id', enroll.id);
+
+    if (error) {
+      console.error('[Webhook] Erro ao cancelar matricula:', error.message);
+      return '❌ Ocorreu um erro ao cancelar. Por favor, tente novamente.';
+    }
+
+    return `✅ A pré-matrícula do aluno *${enroll.student_name}* foi cancelada com sucesso.`;
   }
 
   // ── list_classes ─────────────────────────────────────────────────────────

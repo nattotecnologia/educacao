@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { GraduationCap, Plus, Loader2, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { GraduationCap, Plus, Loader2, Search, Filter, ChevronLeft, ChevronRight, Edit2, XCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { maskPhone } from '@/utils/masks';
 
@@ -189,7 +189,7 @@ export default function EnrollmentsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                {['Aluno', 'Turma / Curso', 'Contato', 'Status', 'Matriculado em'].map(h => (
+                {['Aluno', 'Turma / Curso', 'Contato', 'Status', 'Matriculado em', 'Ações'].map(h => (
                   <th key={h} style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
@@ -218,6 +218,40 @@ export default function EnrollmentsPage() {
                     </td>
                     <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {new Date(en.enrolled_at).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => router.push(`/dashboard/enrollments/${en.id}`)}
+                          title="Editar"
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem' }}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        {en.status !== 'cancelled' && (
+                          <button
+                            onClick={async () => {
+                              if (confirm('Tem certeza que deseja cancelar esta matrícula?')) {
+                                const supabase = createClient();
+                                const { data: { session } } = await supabase.auth.getSession();
+                                await fetch(`/api/enrollments/${en.id}`, {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${session?.access_token}`
+                                  },
+                                  body: JSON.stringify({ status: 'cancelled' })
+                                });
+                                fetchEnrollments();
+                              }
+                            }}
+                            title="Cancelar Matrícula"
+                            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.25rem' }}
+                          >
+                            <XCircle size={16} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

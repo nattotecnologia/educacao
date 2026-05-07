@@ -15,7 +15,9 @@ import {
   KanbanSquare,
   BookOpen,
   GraduationCap,
-  CalendarDays
+  CalendarDays,
+  Tag,
+  DollarSign
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -45,11 +47,13 @@ export default function Sidebar() {
 
   const menuItems = [
     { name: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard', group: 'crm' },
+    { name: 'Financeiro', icon: DollarSign, path: '/dashboard/financial', group: 'crm' },
     { name: 'Kanban', icon: KanbanSquare, path: '/dashboard/pipeline', group: 'crm' },
     { name: 'Leads (Em Massa)', icon: Users, path: '/dashboard/leads', group: 'crm' },
     { name: 'Chat (Handoff)', icon: MessageSquare, path: '/dashboard/chat', group: 'crm' },
     { name: 'Cursos', icon: BookOpen, path: '/dashboard/courses', group: 'academic' },
     { name: 'Turmas', icon: Users, path: '/dashboard/classes', group: 'academic' },
+    { name: 'Promoções', icon: Tag, path: '/dashboard/promotions', group: 'academic' },
     { name: 'Matrículas', icon: GraduationCap, path: '/dashboard/enrollments', group: 'academic' },
     { name: 'Agendamentos', icon: CalendarDays, path: '/dashboard/visits', group: 'academic' },
     { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents', group: 'automation' },
