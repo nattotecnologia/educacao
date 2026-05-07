@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('promotions')
-    .select('*')
+    .select('*, courses(name)')
     .eq('institution_id', institutionId)
     .order('created_at', { ascending: false });
 
@@ -47,13 +47,13 @@ export async function POST(request: NextRequest) {
   if (!institutionId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { name, description, discount_percentage, discount_value, is_active, valid_until } = body;
+  const { name, description, discount_percentage, discount_value, is_active, valid_until, course_id } = body;
 
   if (!name) return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 });
 
   const { data, error } = await supabase
     .from('promotions')
-    .insert({ institution_id: institutionId, name, description, discount_percentage, discount_value, is_active, valid_until })
+    .insert({ institution_id: institutionId, name, description, discount_percentage, discount_value, is_active, valid_until, course_id })
     .select()
     .single();
 
