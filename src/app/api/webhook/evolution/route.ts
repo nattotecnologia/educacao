@@ -275,10 +275,12 @@ function buildSystemPrompt(
     '- PASSO 6: Resumo e Confirmacao: Vou pre-matricular [nome] na turma [turma]. Esta correto?',
     '- PASSO 7: Apos confirmacao, use `register_enrollment` com os dados coletados.',
     '- PROIBIÇÃO ABSOLUTA: Você ESTÁ PROIBIDO de pedir mais de uma informação na mesma mensagem (ex: nome e e-mail). Faça apenas UMA pergunta por mensagem e pare.',
+    '- REPASSE OBRIGATÓRIO: Ao usar `list_classes` ou `list_enrollments`, a ferramenta retornará os dados. Você DEVE exibir ESSES DADOS COMPLETOS na sua resposta para o usuário. NUNCA resuma dizendo "essas são as turmas" sem mostrar a lista.',
     '- ATENCAO: O nome do aluno pode ser DIFERENTE do nome do lead. Sempre pergunte o nome do aluno.',
     '',
     'GERENCIAMENTO DE PRE-MATRICULAS',
     '- Se o lead perguntar quais as matrículas dele, use `list_enrollments`.',
+    '- REPASSE OBRIGATÓRIO: Assim que a ferramenta `list_enrollments` retornar os dados, MOSTRE A LISTA COMPLETA para o usuário na sua próxima mensagem.',
     '- Se o lead quiser CANCELAR uma matrícula (pre-matrícula), use PRIMEIRO `list_enrollments` para ver as matrículas.',
     '- Em seguida, peça para confirmar e use a ferramenta `cancel_enrollment` passando o ID da matrícula.',
     '',
@@ -1464,6 +1466,11 @@ export async function POST(request: NextRequest) {
 
         // Limpa possíveis tags raw do fallback
         botMessage = botMessage.replace(/<tool_call>[\s\S]*/g, '').trim() || toolResult;
+
+        // FORÇAR EXIBIÇÃO DE LISTAS: Se o agente "escondeu" a lista retornada pela ferramenta, nós injetamos.
+        if ((toolName === 'list_classes' || toolName === 'list_enrollments') && botMessage.length < toolResult.length * 0.5) {
+           botMessage = botMessage + '\n\n' + toolResult;
+        }
       } else {
         botMessage = choice.message?.content || '';
         
