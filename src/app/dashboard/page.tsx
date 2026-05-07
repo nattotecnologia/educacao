@@ -11,7 +11,7 @@ const EnrollmentEvolutionChart = dynamic(() => import('./components/EnrollmentEv
   ssr: false, 
   loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}><Loader2 className="animate-spin" /></div>
 });
-import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2 } from 'lucide-react';
+import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2, DollarSign } from 'lucide-react';
 import { authService } from '@/services';
 import { maskPhone } from '@/utils/masks';
 import styles from './Dashboard.module.css';
@@ -36,6 +36,7 @@ interface Stats {
   heatmapData: number[];
   rankedCourses?: { name: string; count: number }[];
   enrollmentEvolution?: { name: string; count: number }[];
+  totalBilled?: number;
 }
 
 export default function Dashboard() {
@@ -77,7 +78,7 @@ export default function Dashboard() {
 
         const { data: enrollmentsData } = await supabase
           .from('enrollments')
-          .select('enrolled_at, classes(courses(id, name))')
+          .select('enrolled_at, status, classes(courses(id, name, price))')
           .eq('institution_id', profile.institution_id);
 
         const courseCounts: Record<string, number> = {};
@@ -122,10 +123,18 @@ export default function Dashboard() {
           count
         }));
 
+        let totalBilled = 0;
+        enrollmentsData?.forEach((e: any) => {
+          if (e.status === 'active') {
+            totalBilled += e.classes?.courses?.price || 0;
+          }
+        });
+
         setStats({
           ...data,
           rankedCourses: ranked,
-          enrollmentEvolution: evolution
+          enrollmentEvolution: evolution,
+          totalBilled
         });
       } else {
         const text = await res.text();
@@ -250,6 +259,21 @@ export default function Dashboard() {
             <span className={styles.trendText}>{stats.converted} matrículas realizadas</span>
           </div>
         </div>
+
+        <div className="card">
+          <div className={styles.statHeader}>
+            <span className={styles.statTitle}>Faturamento Estimado</span>
+            <div className={styles.iconWrapper} style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-warning)' }}>
+              <DollarSign size={20} />
+            </div>
+          </div>
+          <p className={styles.statValue}>
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.totalBilled || 0)}
+          </p>
+          <div className={styles.statFooter}>
+            <span className={styles.trendText}>Receita de matrículas ativas</span>
+          </div>
+        </div>
       </div>
 
       {/* Gráficos Principais (Lado a Lado, Mesmo Tamanho) */}
@@ -324,39 +348,58 @@ export default function Dashboard() {
 
         {/* Mapa de Calor de Visitas */}
         <div className="card">
-          <h3 className={styles.chartTitle}>Dias Mais Movimentados (Visitas)</h3>
-          {stats.heatmapData && Math.max(...stats.heatmapData) > 0 ? (
+          <h3 className={styles.chartTitle}>Visitas no Mês Atual (Mapa de Calor)</h3>
+          {stats.heatmapData && stats.heatmapData.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
-                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => {
-                  const val = stats.heatmapData[i];
-                  const max = Math.max(...stats.heatmapData);
+              {/* Header com Dias da Semana */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', textAlign: 'center', fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, idx) => <span key={`${d}-${idx}`}>{d}</span>)}
+              </div>
+              
+              {/* Grid do Calendário */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+                {/* Preenche os dias vazios antes do dia 1 */}
+                {Array.from({ length: new Date(new Date().getFullYear(), new Date().getMonth(), 1).getDay() }).map((_, i) => (
+                  <div key={`empty-${i}`} style={{ aspectRatio: '1/1' }} />
+                ))}
+                
+                {/* Dias do Mês */}
+                {stats.heatmapData.map((val, i) => {
+                  const max = Math.max(...stats.heatmapData, 1);
                   const intensity = val > 0 ? 0.2 + (val / max) * 0.8 : 0.05;
+                  const dayNum = i + 1;
                   
                   return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
-                      <div 
-                        style={{ 
-                          width: '100%', 
-                          aspectRatio: '1/1', 
-                          borderRadius: 'var(--radius-sm)', 
-                          backgroundColor: 'var(--accent-primary)', 
-                          opacity: intensity,
-                          transition: 'opacity 0.3s'
-                        }}
-                        title={`${val} visitas`}
-                      />
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{day}</span>
+                    <div 
+                      key={i} 
+                      style={{ 
+                        aspectRatio: '1/1', 
+                        borderRadius: 'var(--radius-sm)', 
+                        backgroundColor: 'var(--accent-primary)', 
+                        opacity: intensity,
+                        transition: 'opacity 0.3s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: val > 0 ? 700 : 400,
+                        color: val > 0 ? '#fff' : 'var(--text-muted)',
+                        position: 'relative',
+                        cursor: 'pointer'
+                      }}
+                      title={`Dia ${dayNum}: ${val} visitas`}
+                    >
+                      {dayNum}
                     </div>
                   );
                 })}
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Baseado no histórico total de agendamentos</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Distribuição de visitas ao longo do mês vigente</p>
             </div>
           ) : (
              <div className={styles.emptyChart}>
                <Activity size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 1rem' }} />
-               <p>Sem dados suficientes para o mapa de calor.</p>
+               <p>Sem dados suficientes para o mapa de calor do mês.</p>
              </div>
           )}
         </div>

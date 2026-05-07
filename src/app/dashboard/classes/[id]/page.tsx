@@ -69,11 +69,22 @@ export default function ClassDetailPage() {
         .single();
 
       const enrollData = await enrollRes.json();
+      const enrollsList = enrollData.data || [];
+      const activeCount = enrollsList.filter((e: any) => e.status !== 'cancelled').length;
+
+      if (classData && classData.filled_slots !== activeCount) {
+        // Auto-correção de dessincronização histórica no banco de dados
+        await supabase
+          .from('classes')
+          .update({ filled_slots: activeCount })
+          .eq('id', id);
+        classData.filled_slots = activeCount;
+      }
 
       if (classErr) throw new Error('Turma não encontrada.');
       setCls({
         ...classData,
-        enrollments: enrollData.data || [],
+        enrollments: enrollsList,
       });
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar turma.');
@@ -98,8 +109,9 @@ export default function ClassDetailPage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="animate-spin" size={40} /></div>;
   if (!cls) return <div style={{ color: 'var(--accent-danger)', padding: '2rem' }}>{error || 'Turma não encontrada.'}</div>;
 
-  const vagas = cls.total_slots - cls.filled_slots;
-  const pct = Math.round((cls.filled_slots / cls.total_slots) * 100);
+  const activeEnrollmentsCount = cls.enrollments.filter(e => e.status !== 'cancelled').length;
+  const vagas = cls.total_slots - activeEnrollmentsCount;
+  const pct = Math.round((activeEnrollmentsCount / cls.total_slots) * 100);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '900px' }}>

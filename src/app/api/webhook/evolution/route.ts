@@ -583,7 +583,7 @@ async function executeTool(
 
     const { data: enroll, error: findErr } = await supabase
       .from('enrollments')
-      .select('id, student_name, status')
+      .select('id, student_name, status, class_id')
       .eq('institution_id', institutionId)
       .eq('id', enrollment_id)
       .single();
@@ -599,6 +599,22 @@ async function executeTool(
     if (error) {
       console.error('[Webhook] Erro ao cancelar matricula:', error.message);
       return '❌ Ocorreu um erro ao cancelar. Por favor, tente novamente.';
+    }
+
+    // Decrementar vagas da turma
+    if (enroll.class_id) {
+      const { data: classData } = await supabase
+        .from('classes')
+        .select('filled_slots')
+        .eq('id', enroll.class_id)
+        .single();
+
+      if (classData && classData.filled_slots > 0) {
+        await supabase
+          .from('classes')
+          .update({ filled_slots: classData.filled_slots - 1 })
+          .eq('id', enroll.class_id);
+      }
     }
 
     return `✅ A pré-matrícula do aluno *${enroll.student_name}* foi cancelada com sucesso.`;

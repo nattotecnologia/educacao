@@ -77,18 +77,25 @@ export async function GET(request: Request) {
     // Últimos 5 leads para o feed
     const recentLeads = allLeads.slice(0, 5);
 
-    // Busca todas as visitas para o Heatmap
+    // Busca todas as visitas para o Heatmap (Mês Atual)
     const { data: visits } = await supabaseAdmin
       .from('visit_appointments')
       .select('scheduled_at')
       .eq('institution_id', institutionId);
 
-    const heatmapData = [0, 0, 0, 0, 0, 0, 0]; // 0=Dom, 6=Sáb
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const heatmapData = Array(daysInMonth).fill(0);
+
     if (visits) {
       visits.forEach(v => {
         if (v.scheduled_at) {
           const d = new Date(v.scheduled_at);
-          heatmapData[d.getDay()] += 1;
+          if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+            const dayNum = d.getDate();
+            heatmapData[dayNum - 1] += 1;
+          }
         }
       });
     }

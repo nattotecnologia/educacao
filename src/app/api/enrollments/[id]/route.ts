@@ -33,8 +33,8 @@ export async function PATCH(
   const body = await request.json();
   const { status } = body;
 
-  // Se cancelando a matrícula, decrementar vagas
-  if (status === 'cancelled') {
+  // Se cancelando a matrícula, decrementar vagas. Se reativando, incrementar vagas.
+  if (status) {
     const { data: enrollment } = await supabase
       .from('enrollments')
       .select('class_id, status')
@@ -42,18 +42,33 @@ export async function PATCH(
       .eq('institution_id', institutionId)
       .single();
 
-    if (enrollment && enrollment.status !== 'cancelled') {
-      const { data: classData } = await supabase
-        .from('classes')
-        .select('filled_slots')
-        .eq('id', enrollment.class_id)
-        .single();
-
-      if (classData && classData.filled_slots > 0) {
-        await supabase
+    if (enrollment) {
+      if (status === 'cancelled' && enrollment.status !== 'cancelled') {
+        const { data: classData } = await supabase
           .from('classes')
-          .update({ filled_slots: classData.filled_slots - 1 })
-          .eq('id', enrollment.class_id);
+          .select('filled_slots')
+          .eq('id', enrollment.class_id)
+          .single();
+
+        if (classData && classData.filled_slots > 0) {
+          await supabase
+            .from('classes')
+            .update({ filled_slots: classData.filled_slots - 1 })
+            .eq('id', enrollment.class_id);
+        }
+      } else if (status !== 'cancelled' && enrollment.status === 'cancelled') {
+        const { data: classData } = await supabase
+          .from('classes')
+          .select('filled_slots')
+          .eq('id', enrollment.class_id)
+          .single();
+
+        if (classData) {
+          await supabase
+            .from('classes')
+            .update({ filled_slots: classData.filled_slots + 1 })
+            .eq('id', enrollment.class_id);
+        }
       }
     }
   }
