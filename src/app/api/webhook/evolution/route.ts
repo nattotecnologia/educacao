@@ -191,7 +191,8 @@ async function fetchKnowledgeBase(
     lines.push('');
     promotions.forEach(p => {
       const discount = p.discount_percentage ? `${p.discount_percentage}%` : `R$ ${p.discount_value}`;
-      const valid = p.valid_until ? ` (Válido até: ${new Date(p.valid_until).toLocaleDateString('pt-BR')})` : '';
+      // Pega os 10 primeiros caracteres (YYYY-MM-DD) e inverte para DD/MM/YYYY para ignorar timezone shift
+      const valid = p.valid_until ? ` (Válido até: ${p.valid_until.substring(0, 10).split('-').reverse().join('/')})` : '';
       lines.push(`🎁 *${p.name}* — ${p.description || ''}. Desconto de ${discount}${valid}`);
     });
     lines.push('');
@@ -271,8 +272,11 @@ function buildSystemPrompt(
     '## SUAS CAPACIDADES E REGRAS DE OURO',
     'Voce pode: AGENDAR, LISTAR, CANCELAR e REAGENDAR visitas; LISTAR TURMAS abertas com vagas; e REGISTRAR PRE-MATRICULAS.',
     '',
-    'REGRA DE FORMATACAO (WHATSAPP)',
-    '- No WhatsApp, o negrito e feito com APENAS UM asterisco. Exemplo: *texto*. NUNCA use dois asteriscos (**texto**).',
+    'REGRA DE FORMATACAO (WHATSAPP) E ESTILO',
+    '- O WhatsApp NAO suporta Markdown padrao (**texto**).',
+    '- Para colocar palavras em negrito, use APENAS UM asterisco de cada lado. Exemplo correto: *texto*. Exemplo ERRADO: **texto**.',
+    '- NUNCA, SOB NENHUMA HIPOTESE, use dois asteriscos juntos (**). O sistema vai quebrar se voce fizer isso.',
+    '- Evite o excesso de asteriscos. Destaque apenas nomes de cursos e o preco final para nao poluir a leitura.',
     '',
     'GERENCIAMENTO DE VISITAS EXISTENTES',
     '- Se o lead perguntar sobre seus agendamentos, use `list_visits` para buscar a lista.',
