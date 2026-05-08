@@ -300,7 +300,7 @@ export default function VisitsPage() {
         .channel(channelId)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'visits' },
+          { event: '*', schema: 'public', table: 'visit_appointments' },
           () => {
             console.log('Visitas mudaram, recarregando agenda...');
             fetchVisits();

@@ -72,7 +72,35 @@ export default function FinancialPage() {
     }
   }, []);
 
-  useEffect(() => { fetchFinancialData(); }, [fetchFinancialData]);
+  useEffect(() => {
+    fetchFinancialData();
+
+    let channel: any;
+    const setupRealtime = async () => {
+      const supabase = createClient();
+      const channelId = `financial_realtime_${Math.random().toString(36).substring(7)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'enrollments' },
+          () => {
+            console.log('Dados de faturamento alterados, atualizando tela financeira...');
+            fetchFinancialData();
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [fetchFinancialData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

@@ -170,6 +170,22 @@ export default function Dashboard() {
             fetchStats();
           }
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'enrollments' },
+          () => {
+            console.log('Dados de matrículas mudaram, atualizando faturamento do dashboard...');
+            fetchStats();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'visit_appointments' },
+          () => {
+            console.log('Dados de agendamentos mudaram, atualizando mapa de calor do dashboard...');
+            fetchStats();
+          }
+        )
         .subscribe();
     };
 
