@@ -123,10 +123,46 @@ export default function Dashboard() {
           count
         }));
 
+        // Buscar promoções ativas
+        const { data: promotionsData } = await supabase
+          .from('promotions')
+          .select('*')
+          .eq('institution_id', profile.institution_id)
+          .eq('is_active', true);
+
+        const now = new Date();
+        const activePromotions = (promotionsData || []).filter((p: any) => {
+          if (!p.valid_until) return true;
+          return new Date(p.valid_until) >= now;
+        });
+
+        const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
+        const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
+
         let totalBilled = 0;
         enrollmentsData?.forEach((e: any) => {
           if (e.status === 'active') {
-            totalBilled += e.classes?.courses?.price || 0;
+            let price = e.classes?.courses?.price || 0;
+            const courseId = e.classes?.courses?.id;
+            const enrolledAt = new Date(e.enrolled_at);
+
+            if (price > 0 && courseId) {
+              const specificPromo = activePromotions.find((p: any) => p.course_id === courseId && new Date(p.created_at) <= enrolledAt);
+              const validGlobalPromos = globalPromotions.filter((p: any) => new Date(p.created_at) <= enrolledAt);
+              const appliedPromo = specificPromo || (validGlobalPromos.length > 0 ? validGlobalPromos[0] : null);
+
+              if (appliedPromo) {
+                let discountAmount = 0;
+                if (appliedPromo.discount_percentage) {
+                  discountAmount = price * (appliedPromo.discount_percentage / 100);
+                } else if (appliedPromo.discount_value) {
+                  discountAmount = appliedPromo.discount_value;
+                }
+                price = Math.max(0, price - discountAmount);
+              }
+            }
+
+            totalBilled += price;
           }
         });
 

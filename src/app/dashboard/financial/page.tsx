@@ -29,6 +29,7 @@ export default function FinancialPage() {
           classes (
             name,
             courses (
+              id,
               name,
               price
             )
@@ -38,6 +39,21 @@ export default function FinancialPage() {
 
       if (error) throw error;
 
+      // Busca promoções ativas
+      const { data: promotionsData } = await supabase
+        .from('promotions')
+        .select('*')
+        .eq('is_active', true);
+
+      const now = new Date();
+      const activePromotions = (promotionsData || []).filter((p: any) => {
+        if (!p.valid_until) return true;
+        return new Date(p.valid_until) >= now;
+      });
+
+      const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
+      const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
+
       let billed = 0;
       let pending = 0;
       let cancelled = 0;
@@ -45,8 +61,34 @@ export default function FinancialPage() {
 
       const items = data || [];
       
-      items.forEach((enrollment: any) => {
-        const price = enrollment.classes?.courses?.price || 0;
+      const mappedItems = items.map((enrollment: any) => {
+        let originalPrice = enrollment.classes?.courses?.price || 0;
+        let price = originalPrice;
+        const courseId = enrollment.classes?.courses?.id;
+        const enrolledAt = new Date(enrollment.enrolled_at);
+        let hasDiscount = false;
+        let promoName = '';
+
+        if (originalPrice > 0 && courseId) {
+          // A promoção só é válida se foi criada ANTES ou no mesmo momento da matrícula
+          const specificPromo = activePromotions.find((p: any) => p.course_id === courseId && new Date(p.created_at) <= enrolledAt);
+          const validGlobalPromos = globalPromotions.filter((p: any) => new Date(p.created_at) <= enrolledAt);
+          const appliedPromo = specificPromo || (validGlobalPromos.length > 0 ? validGlobalPromos[0] : null);
+
+          if (appliedPromo) {
+            let discountAmount = 0;
+            if (appliedPromo.discount_percentage) {
+              discountAmount = originalPrice * (appliedPromo.discount_percentage / 100);
+            } else if (appliedPromo.discount_value) {
+              discountAmount = appliedPromo.discount_value;
+            }
+            if (discountAmount > 0) {
+              price = Math.max(0, originalPrice - discountAmount);
+              hasDiscount = true;
+              promoName = appliedPromo.name;
+            }
+          }
+        }
         
         if (enrollment.status === 'active') {
           billed += price;
@@ -56,6 +98,14 @@ export default function FinancialPage() {
         } else if (enrollment.status === 'cancelled') {
           cancelled += price;
         }
+
+        return {
+          ...enrollment,
+          originalPrice,
+          calculatedPrice: price,
+          hasDiscount,
+          promoName
+        };
       });
 
       setMetrics({
@@ -64,7 +114,7 @@ export default function FinancialPage() {
         totalCancelled: cancelled,
         activeEnrollments: activeCount
       });
-      setEnrollments(items);
+      setEnrollments(mappedItems);
     } catch (err) {
       console.error(err);
     } finally {
@@ -183,7 +233,11 @@ export default function FinancialPage() {
                 </thead>
                 <tbody>
                   {enrollments.slice(0, 10).map((en, i) => {
-                    const price = en.classes?.courses?.price || 0;
+                    const originalPrice = en.originalPrice || 0;
+                    const price = en.calculatedPrice || 0;
+                    const hasDiscount = en.hasDiscount;
+                    const promoName = en.promoName;
+
                     return (
                       <tr key={en.id} style={{ borderBottom: i < 9 ? '1px solid var(--glass-border)' : 'none' }}>
                         <td style={{ padding: '0.875rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -193,8 +247,24 @@ export default function FinancialPage() {
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{en.classes?.courses?.name || '—'}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{en.classes?.name || '—'}</div>
                         </td>
-                        <td style={{ padding: '0.875rem 1rem', fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                          {formatCurrency(price)}
+                        <td style={{ padding: '0.875rem 1rem' }}>
+                          {hasDiscount ? (
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ textDecoration: 'line-through', fontSize: '0.75rem', opacity: 0.6, color: 'var(--text-muted)' }}>
+                                {formatCurrency(originalPrice)}
+                              </span>
+                              <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.875rem' }}>
+                                {formatCurrency(price)}
+                              </span>
+                              <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 600, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                🔥 {promoName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-primary)', fontSize: '0.875rem', fontWeight: 500 }}>
+                              {formatCurrency(price)}
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '0.875rem 1rem' }}>
                           <span style={{ 

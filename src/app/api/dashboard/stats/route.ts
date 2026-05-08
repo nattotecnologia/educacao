@@ -28,9 +28,15 @@ export async function GET(request: Request) {
 
     if (leadsError) throw leadsError;
 
+    // Busca todas as matriculas
+    const { data: enrollments, error: enrollmentsError } = await supabaseAdmin
+      .from('enrollments')
+      .select('id')
+      .eq('institution_id', institutionId);
+
     const allLeads = leads || [];
     const total = allLeads.length;
-    const converted = allLeads.filter(l => l.status === 'converted').length;
+    const converted = enrollments ? enrollments.length : 0;
     const aiHandling = allLeads.filter(l => l.status === 'ai_handling').length;
     const newLeads = allLeads.filter(l => l.status === 'new').length;
     const conversionRate = total > 0 ? Math.round((converted / total) * 100) : 0;
