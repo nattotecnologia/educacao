@@ -11,6 +11,7 @@ interface ClassOption {
   name: string;
   total_slots: number;
   filled_slots: number;
+  course_id: string;
   courses?: { name: string };
 }
 
@@ -26,6 +27,7 @@ export default function NewEnrollmentPage() {
   const presetClassId = searchParams.get('class_id') || '';
 
   const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,11 +47,14 @@ export default function NewEnrollmentPage() {
   const fetchData = useCallback(async () => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
-    const [classRes] = await Promise.all([
+    const [classRes, courseRes] = await Promise.all([
       fetch('/api/classes', { headers: { Authorization: `Bearer ${session?.access_token}` } }),
+      fetch('/api/courses', { headers: { Authorization: `Bearer ${session?.access_token}` } })
     ]);
     const classData = await classRes.json();
+    const courseData = await courseRes.json();
     setClasses(classData.filter((c: any) => c.status === 'open'));
+    setCourses(courseData);
 
     // Busca leads via supabase client
     const { data: { user } } = await supabase.auth.getUser();
@@ -105,6 +110,7 @@ export default function NewEnrollmentPage() {
   const lbl = { display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '0.5rem' };
 
   const selectedClass = classes.find(c => c.id === form.class_id);
+  const selectedCourse = selectedClass ? courses.find(c => c.id === selectedClass.course_id) : null;
   const vagas = selectedClass ? selectedClass.total_slots - selectedClass.filled_slots : null;
 
   return (
@@ -147,6 +153,24 @@ export default function NewEnrollmentPage() {
               <p style={{ fontSize: '0.75rem', color: vagas === 0 ? '#ef4444' : '#10b981', marginTop: '0.35rem' }}>
                 {vagas === 0 ? '⚠️ Turma sem vagas disponíveis!' : `✅ ${vagas} vaga(s) disponível(is)`}
               </p>
+            )}
+            {selectedCourse && selectedCourse.price != null && (
+              <div style={{ marginTop: '0.75rem', padding: '0.85rem', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Valor para o aluno: </span>
+                {selectedCourse.original_price != null && selectedCourse.original_price > selectedCourse.price ? (
+                  <>
+                    <span style={{ textDecoration: 'line-through', opacity: 0.6, fontSize: '0.8rem', marginRight: '6px' }}>
+                      R$ {selectedCourse.original_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <strong style={{ color: '#10b981', fontSize: '1.05rem' }}>R$ {selectedCourse.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                    <span style={{ display: 'block', marginTop: '4px', fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>🔥 Promoção Ativa: {selectedCourse.active_promotion}</span>
+                  </>
+                ) : (
+                  <strong style={{ color: '#10b981', fontSize: '1.05rem' }}>
+                    {selectedCourse.price === 0 ? 'Gratuito' : `R$ ${selectedCourse.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  </strong>
+                )}
+              </div>
             )}
           </div>
 

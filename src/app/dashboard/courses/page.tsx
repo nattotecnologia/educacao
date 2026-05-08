@@ -14,6 +14,8 @@ interface Course {
   price: number;
   is_active: boolean;
   classes?: { count: number }[];
+  original_price?: number;
+  active_promotion?: string;
 }
 
 const MODALITY_LABEL: Record<string, { label: string; icon: any; color: string }> = {
@@ -144,6 +146,9 @@ export default function CoursesPage() {
                       {!course.is_active && (
                         <span style={s.badge('#94a3b8')}>Inativo</span>
                       )}
+                      {course.active_promotion && (
+                        <span style={s.badge('#10b981')}>🔥 {course.active_promotion}</span>
+                      )}
                     </div>
                     <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
                       {course.name}
@@ -166,7 +171,18 @@ export default function CoursesPage() {
                   {course.price != null && (
                     <span style={s.metaItem}>
                       <DollarSign size={13} />
-                      {course.price === 0 ? 'Gratuito' : `R$ ${course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      {course.original_price != null && course.original_price > course.price ? (
+                        <>
+                          <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '4px', fontSize: '0.75rem' }}>
+                            R$ {course.original_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span style={{ color: '#10b981', fontWeight: 700 }}>
+                            R$ {course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </>
+                      ) : (
+                        course.price === 0 ? 'Gratuito' : `R$ ${course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      )}
                     </span>
                   )}
                   <span style={{ ...s.metaItem, marginLeft: 'auto', color: 'var(--accent-primary)', fontWeight: 600 }}>

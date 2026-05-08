@@ -38,7 +38,52 @@ export async function GET(
     .single();
 
   if (error || !data) return NextResponse.json({ error: 'Curso não encontrado.' }, { status: 404 });
-  return NextResponse.json(data);
+
+  // Se for gratuito, ignora desconto
+  if (data.price === 0 || data.price == null) {
+    return NextResponse.json(data);
+  }
+
+  // Busca promoções ativas da instituição
+  const { data: promotionsData } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('institution_id', institutionId)
+    .eq('is_active', true);
+
+  const now = new Date();
+  const activePromotions = (promotionsData || []).filter((p: any) => {
+    if (!p.valid_until) return true;
+    return new Date(p.valid_until) >= now;
+  });
+
+  const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
+  const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
+  const specificPromo = activePromotions.find((p: any) => p.course_id === data.id);
+  
+  const appliedPromo = specificPromo || globalPromo;
+
+  let finalData = { ...data };
+
+  if (appliedPromo) {
+    let discountAmount = 0;
+    if (appliedPromo.discount_percentage) {
+      discountAmount = data.price * (appliedPromo.discount_percentage / 100);
+    } else if (appliedPromo.discount_value) {
+      discountAmount = appliedPromo.discount_value;
+    }
+
+    if (discountAmount > 0) {
+      finalData = {
+        ...data,
+        original_price: data.price,
+        price: Math.max(0, data.price - discountAmount),
+        active_promotion: appliedPromo.name
+      };
+    }
+  }
+
+  return NextResponse.json(finalData);
 }
 
 export async function PATCH(

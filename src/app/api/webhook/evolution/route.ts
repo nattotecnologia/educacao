@@ -120,11 +120,20 @@ async function fetchKnowledgeBase(
 
   const courses: Course[] = (coursesRes.data as Course[]) || [];
   const classes: ClassRow[] = (classesRes.data as ClassRow[]) || [];
-  const promotions: any[] = promotionsRes.data || [];
+  const allPromotions: any[] = promotionsRes.data || [];
+
+  const now = new Date();
+  const promotions = allPromotions.filter((p: any) => {
+    if (!p.valid_until) return true;
+    return new Date(p.valid_until) >= now;
+  });
 
   if (courses.length === 0 && classes.length === 0 && promotions.length === 0) {
     return { text: '', courses, classes, promotions };
   }
+
+  const globalPromotions = promotions.filter((p: any) => !p.course_id);
+  const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
 
   const lines: string[] = [
     '### CURSOS E TURMAS DISPONÍVEIS (dados reais do sistema):',
@@ -132,10 +141,35 @@ async function fetchKnowledgeBase(
   ];
 
   courses.forEach((c) => {
-    const price = c.price ? `R$ ${Number(c.price).toFixed(2)}` : 'Sob consulta';
+    // Calculo de desconto
+    let originalPriceStr = '';
+    let finalPriceStr = c.price ? `R$ ${Number(c.price).toFixed(2)}` : 'Sob consulta';
+    
+    if (c.price && c.price > 0) {
+      const specificPromo = promotions.find((p: any) => p.course_id === c.id);
+      const appliedPromo = specificPromo || globalPromo;
+
+      if (appliedPromo) {
+        let discountAmount = 0;
+        if (appliedPromo.discount_percentage) {
+          discountAmount = c.price * (appliedPromo.discount_percentage / 100);
+        } else if (appliedPromo.discount_value) {
+          discountAmount = appliedPromo.discount_value;
+        }
+
+        if (discountAmount > 0) {
+          const finalPrice = Math.max(0, c.price - discountAmount);
+          originalPriceStr = `De R$ ${Number(c.price).toFixed(2)} por `;
+          finalPriceStr = `R$ ${finalPrice.toFixed(2)} (Promoção: ${appliedPromo.name})`;
+        }
+      }
+    }
+
+    const priceText = originalPriceStr ? `${originalPriceStr}${finalPriceStr}` : finalPriceStr;
     const duration = c.duration_hours ? `${c.duration_hours}h` : null;
     const extras = [c.modality, duration].filter(Boolean).join(', ');
-    lines.push(`📚 *${c.name}* — ${c.description || 'Sem descrição'}. Preço: ${price}. (${extras})`);
+    
+    lines.push(`📚 *${c.name}* — ${c.description || 'Sem descrição'}. Preço: ${priceText}. (${extras})`);
 
     // Turmas deste curso
     const courseClasses = classes.filter((cl) => cl.course_id === c.id);
@@ -153,7 +187,7 @@ async function fetchKnowledgeBase(
   });
 
   if (promotions.length > 0) {
-    lines.push('### PROMOÇÕES E DESCONTOS ATIVOS (Use APENAS estes descontos):');
+    lines.push('### PROMOÇÕES E DESCONTOS ATIVOS (Use APENAS estes descontos e já estão aplicados nos preços acima):');
     lines.push('');
     promotions.forEach(p => {
       const discount = p.discount_percentage ? `${p.discount_percentage}%` : `R$ ${p.discount_value}`;

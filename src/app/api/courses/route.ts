@@ -39,7 +39,57 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // Busca promoções ativas da instituição
+  const { data: promotionsData } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('institution_id', institutionId)
+    .eq('is_active', true);
+
+  const now = new Date();
+  const activePromotions = (promotionsData || []).filter((p: any) => {
+    if (!p.valid_until) return true;
+    return new Date(p.valid_until) >= now;
+  });
+
+  // Separa a promoção global (se houver) e as específicas
+  const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
+  // Se houver mais de uma global, pega a que dá maior desconto ou a primeira
+  const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
+
+  const coursesWithDiscounts = (data || []).map((course: any) => {
+    // Se o curso for gratuito, ignora desconto
+    if (course.price === 0 || course.price == null) return course;
+
+    // Procura promoção específica para o curso
+    const specificPromo = activePromotions.find((p: any) => p.course_id === course.id);
+    
+    // Prioridade: Específica > Global
+    const appliedPromo = specificPromo || globalPromo;
+
+    if (appliedPromo) {
+      let discountAmount = 0;
+      if (appliedPromo.discount_percentage) {
+        discountAmount = course.price * (appliedPromo.discount_percentage / 100);
+      } else if (appliedPromo.discount_value) {
+        discountAmount = appliedPromo.discount_value;
+      }
+
+      if (discountAmount > 0) {
+        return {
+          ...course,
+          original_price: course.price,
+          price: Math.max(0, course.price - discountAmount),
+          active_promotion: appliedPromo.name
+        };
+      }
+    }
+
+    return course;
+  });
+
+  return NextResponse.json(coursesWithDiscounts);
 }
 
 export async function POST(request: NextRequest) {

@@ -27,6 +27,8 @@ interface Course {
   price?: number;
   is_active: boolean;
   classes: ClassItem[];
+  original_price?: number;
+  active_promotion?: string;
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -284,8 +286,22 @@ export default function CourseDetailPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <span style={lbl}>Investimento</span>
                   <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-success)' }}>
-                    💰 {course.price === 0 ? 'Gratuito' : `R$ ${course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                    {course.original_price != null && course.original_price > course.price ? (
+                      <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          R$ {course.original_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        <span>R$ {course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    ) : (
+                      course.price === 0 ? 'Gratuito' : `R$ ${course.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    )}
                   </div>
+                  {course.active_promotion && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', fontWeight: 600, marginTop: '2px' }}>
+                      🔥 {course.active_promotion}
+                    </span>
+                  )}
                 </div>
               )}
 
