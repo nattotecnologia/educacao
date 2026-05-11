@@ -71,17 +71,35 @@ export async function GET(request: NextRequest) {
       if (campaign.promotion_id) {
         const { data: promo } = await supabase
           .from('promotions')
-          .select('name, description, discount_percentage, discount_value')
+          .select('name, description, discount_percentage, discount_value, valid_until, courses(name, price)')
           .eq('id', campaign.promotion_id)
           .single();
         
         if (promo) {
           promoText = `\n\n🎁 *${promo.name}*`;
           if (promo.description) promoText += `\n${promo.description}`;
-          if (promo.discount_percentage) {
-            promoText += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
-          } else if (promo.discount_value) {
-            promoText += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+          
+          const courseData = (promo as any).courses;
+          if (courseData) {
+            const original = Number(courseData.price) || 0;
+            let finalPrice = original;
+            if (promo.discount_percentage) finalPrice = original * (1 - Number(promo.discount_percentage)/100);
+            else if (promo.discount_value) finalPrice = Math.max(0, original - Number(promo.discount_value));
+
+            promoText += `\n\n📚 Curso: ${courseData.name}`;
+            promoText += `\n💰 *De: ~R$ ${original.toFixed(2).replace('.', ',')}~*`;
+            promoText += `\n🚀 *Por apenas: R$ ${finalPrice.toFixed(2).replace('.', ',')}!*`;
+          } else {
+            if (promo.discount_percentage) {
+              promoText += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
+            } else if (promo.discount_value) {
+              promoText += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+            }
+          }
+
+          if (promo.valid_until) {
+            const [vy, vm, vd] = promo.valid_until.substring(0, 10).split('-');
+            promoText += `\n\n⏰ Válido até: ${vd}/${vm}/${vy}`;
           }
         }
       }

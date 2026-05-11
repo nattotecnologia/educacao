@@ -299,6 +299,7 @@ function buildSystemPrompt(
     'REGRA DE OURO 1: PROATIVIDADE E CONSULTA',
     '- Antes de pedir qualquer dado, VALORIZE o interesse do lead.',
     '- Se o lead perguntar sobre um curso, PRIMEIRO explique os beneficios e detalhes usando a BASE DE CONHECIMENTO, depois ofereça a listagem de turmas via `list_classes`.',
+    '- OFERTA DE PROMOÇÕES: Se o lead perguntar sobre descontos, campanhas ou uma promoção que acabou de receber, CONSULTE a seção de Promoções na Base de Conhecimento abaixo. Apresente os valores com desconto de forma atrativa ("De/Por") e incentive o agendamento ou a matrícula imediata para não perder a vaga!',
     '',
     'DISTINCAO CRITICA ENTRE VISITA E MATRICULA (NUNCA CONFUNDA AS DUAS)',
     '- AGENDAR VISITA: O visitante quer APENAS conhecer o espaco. E ESTRITAMENTE PROIBIDO pedir nome completo, telefone, nome da crianca, idade ou qual curso ao agendar uma visita. Voce so precisa da DATA e HORA.',
@@ -670,20 +671,40 @@ async function executeTool(
   if (toolName === 'list_classes') {
     const { course_name } = args;
 
-    const { data: openClasses, error } = await supabase
-      .from('classes')
-      .select('id, name, schedule, start_date, status, total_slots, filled_slots, course_id, courses(name, price, modality)')
-      .eq('institution_id', institutionId)
-      .eq('status', 'open');
+    // Busca turmas E promoções ativas paralelamente
+    const [classesRes, promosRes] = await Promise.all([
+      supabase
+        .from('classes')
+        .select('id, name, schedule, start_date, status, total_slots, filled_slots, course_id, courses(id, name, price, modality)')
+        .eq('institution_id', institutionId)
+        .eq('status', 'open'),
+      supabase
+        .from('promotions')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .eq('is_active', true)
+    ]);
 
-    if (error) {
-      console.error('[Webhook] Erro ao listar turmas:', error.message);
+    if (classesRes.error) {
+      console.error('[Webhook] Erro ao listar turmas:', classesRes.error.message);
       return 'Tive um problema ao buscar as turmas disponiveis. Tente novamente.';
     }
 
+    const openClasses = classesRes.data || [];
     if (!openClasses || openClasses.length === 0) {
       return 'No momento nao ha turmas abertas com vagas disponiveis. Nossa equipe pode te avisar quando abrirmos novas turmas!';
     }
+
+    // Filtra promoções ativas por validade
+    const now = new Date();
+    const allPromotions = promosRes.data || [];
+    const activePromotions = allPromotions.filter((p: any) => {
+      if (!p.valid_until) return true;
+      return new Date(p.valid_until) >= now;
+    });
+
+    // Identifica promoção global (sem curso_id vinculado)
+    const globalPromo = activePromotions.find((p: any) => !p.course_id);
 
     let filtered: any[] = openClasses;
     if (course_name) {
@@ -700,19 +721,38 @@ async function executeTool(
       .filter((cl: any) => ((cl.total_slots || 0) - (cl.filled_slots || 0)) > 0)
       .map((cl: any) => {
         const vagas = (cl.total_slots || 0) - (cl.filled_slots || 0);
-        const courseName = (cl.courses as any)?.name || 'Curso';
-        const price = (cl.courses as any)?.price
-          ? `R$ ${Number((cl.courses as any).price).toFixed(2)}`
-          : 'Sob consulta';
-        const modality = (cl.courses as any)?.modality || '';
-        return `*${courseName}* - Turma: "${cl.name}" | Horario: ${cl.schedule || 'A combinar'} | Inicio: ${cl.start_date || 'A definir'} | Vagas: ${vagas} | Investimento: ${price}${modality ? ` (${modality})` : ''}`;
+        const courseData = cl.courses as any;
+        const courseName = courseData?.name || 'Curso';
+        const originalPrice = Number(courseData?.price);
+
+        let priceDisplay = 'Sob consulta';
+
+        if (originalPrice > 0) {
+          // Aplica lógica de desconto para a ferramenta
+          const specificPromo = activePromotions.find((p: any) => p.course_id === courseData?.id);
+          const appliedPromo = specificPromo || globalPromo;
+
+          if (appliedPromo) {
+            let disc = 0;
+            if (appliedPromo.discount_percentage) disc = originalPrice * (Number(appliedPromo.discount_percentage) / 100);
+            else if (appliedPromo.discount_value) disc = Number(appliedPromo.discount_value);
+
+            const finalPrice = Math.max(0, originalPrice - disc);
+            priceDisplay = `De ~R$ ${originalPrice.toFixed(2)}~ por *R$ ${finalPrice.toFixed(2)}* (Promoção: ${appliedPromo.name})`;
+          } else {
+            priceDisplay = `R$ ${originalPrice.toFixed(2)}`;
+          }
+        }
+
+        const modality = courseData?.modality || '';
+        return `*${courseName}* - Turma: "${cl.name}" | Horario: ${cl.schedule || 'A combinar'} | Inicio: ${cl.start_date || 'A definir'} | Vagas: ${vagas} | Investimento: ${priceDisplay}${modality ? ` (${modality})` : ''}`;
       });
 
     if (lines.length === 0) {
       return 'Todas as turmas abertas estao com as vagas esgotadas no momento.';
     }
 
-    return `*Turmas com vagas disponiveis:*\n\n${lines.join('\n\n')}`;
+    return `*Turmas com vagas disponiveis e valores vigentes:*\n\n${lines.join('\n\n')}`;
   }
 
   // ── list_visits ──────────────────────────────────────────────────────────

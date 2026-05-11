@@ -75,7 +75,7 @@ export async function getActivePromotions() {
 
   const { data, error } = await supabase
     .from('promotions')
-    .select('id, name, description, discount_percentage, discount_value, valid_until')
+    .select('id, name, description, discount_percentage, discount_value, valid_until, courses(name, price)')
     .eq('institution_id', profile.institution_id)
     .eq('is_active', true)
     .or(`valid_until.is.null,valid_until.gte.${now}`);

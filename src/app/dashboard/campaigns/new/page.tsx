@@ -125,10 +125,28 @@ export default function NewCampaignPage() {
       if (promo) {
          text += `\n\n*${promo.name}*`;
          if (promo.description) text += `\n${promo.description}`;
-         if (promo.discount_percentage) {
-           text += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
-         } else if (promo.discount_value) {
-           text += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+         
+         if (promo.courses) {
+           const original = Number(promo.courses.price) || 0;
+           let finalPrice = original;
+           if (promo.discount_percentage) finalPrice = original * (1 - Number(promo.discount_percentage)/100);
+           else if (promo.discount_value) finalPrice = Math.max(0, original - Number(promo.discount_value));
+
+           text += `\n\n📚 Curso: ${promo.courses.name}`;
+           text += `\n💰 *De: ~R$ ${original.toFixed(2)}~*`;
+           text += `\n🚀 *Por apenas: R$ ${finalPrice.toFixed(2)}!*`;
+         } else {
+           // Fallback se não tiver curso vinculado
+           if (promo.discount_percentage) {
+             text += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
+           } else if (promo.discount_value) {
+             text += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+           }
+         }
+
+         if (promo.valid_until) {
+           const [vy, vm, vd] = promo.valid_until.substring(0, 10).split('-');
+           text += `\n\n⏰ Válido até: ${vd}/${vm}/${vy}`;
          }
       }
     }
