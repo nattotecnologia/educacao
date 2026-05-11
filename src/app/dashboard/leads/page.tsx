@@ -453,9 +453,8 @@ export default function LeadsPage() {
                 ) : (
                   <div className={styles.visitsList}>
                     {leadVisits.map(visit => {
-                      const date = new Date(visit.scheduled_at).toLocaleString('pt-BR', {
-                        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      });
+                      const [year, month, day, hour, min] = visit.scheduled_at.substring(0, 16).split(/[-T:]/);
+                      const date = `${day}/${month}/${year} ${hour}:${min}`;
                       
                       const visitStatusMap: any = {
                         scheduled: { label: 'Agendada', color: '#3b82f6' },

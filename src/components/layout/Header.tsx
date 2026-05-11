@@ -111,9 +111,8 @@ export default function Header() {
       });
 
       (visitsRes.data || []).forEach((visit: any) => {
-        const date = new Date(visit.scheduled_at).toLocaleString('pt-BR', {
-          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-        });
+        const [year, month, day, hour, min] = visit.scheduled_at.substring(0, 16).split(/[-T:]/);
+        const date = `${day}/${month}/${year} ${hour}:${min}`;
         results.push({
           id: visit.id,
           label: visit.lead_name,

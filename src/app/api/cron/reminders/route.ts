@@ -58,10 +58,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Formata data
-        const localTime = visitTime.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          hour: '2-digit', minute: '2-digit'
-        });
+        const localTime = visit.scheduled_at.substring(11, 16);
 
         const text = template
           .replace(/{nome}/gi, visit.lead_name || 'Visitante')
