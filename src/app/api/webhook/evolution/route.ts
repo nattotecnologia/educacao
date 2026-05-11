@@ -764,11 +764,8 @@ async function executeTool(
     };
 
     const lines = visits.map((v) => {
-      const realDateObj = new Date(v.scheduled_at);
-      const dateStr = realDateObj.toLocaleString('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
+      const [year, month, day, hour, min] = v.scheduled_at.substring(0, 16).split(/[-T:]/);
+      const dateStr = `${day}/${month}/${year} às ${hour}:${min}`;
       const statusLabel = statusLabels[v.status] || v.status;
       const shortId = v.id.substring(0, 8);
       return `• *${dateStr}* — ${statusLabel} (ID: ${shortId})`;
@@ -829,13 +826,8 @@ async function executeTool(
       return '❌ Ocorreu um erro ao cancelar. Por favor, tente novamente.';
     }
 
-    const realDateObj = new Date(visit.scheduled_at);
-    const dateFormatted = realDateObj.toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    return `✅ Visita do dia *${dateFormatted}* cancelada com sucesso. Se quiser agendar uma nova data, é só me chamar!`;
+    const [year, month, day, hour, min] = visit.scheduled_at.substring(0, 16).split(/[-T:]/);
+    return `✅ Visita do dia *${day}/${month}/${year} às ${hour}:${min}* cancelada com sucesso. Se quiser agendar uma nova data, é só me chamar!`;
   }
 
   // ── reschedule_visit ──────────────────────────────────────────────────────
@@ -880,13 +872,12 @@ async function executeTool(
     if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
     if (visit.status === 'done') return '❌ Não é possível reagendar uma visita que já foi realizada.';
 
-    // Montagem segura com fuso horário travado
-    const realDateObj = new Date(`${new_date}T${new_time}:00-03:00`);
-    const dateIsoUtc = !isNaN(realDateObj.getTime()) ? realDateObj.toISOString() : new Date().toISOString();
+    // Força salvar literal no banco forçando a string pura sem cálculos
+    const dbLiteral = `${new_date}T${new_time}:00Z`;
 
     const { error } = await supabase
       .from('visit_appointments')
-      .update({ scheduled_at: dateIsoUtc, status: 'scheduled' })
+      .update({ scheduled_at: dbLiteral, status: 'scheduled' })
       .eq('id', visit.id);
 
     if (error) {
@@ -894,13 +885,8 @@ async function executeTool(
       return '❌ Ocorreu um erro ao reagendar. Por favor, tente novamente.';
     }
 
-    // Garante leitura amigável independente de como foi salvo
-    const displayDate = new Date(dateIsoUtc).toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-    
-    return `✅ Visita reagendada com sucesso! Te esperamos no dia *${displayDate}*. Qualquer dúvida, estou aqui! 😊`;
+    const [year, month, day] = new_date.split('-');
+    return `✅ Visita reagendada com sucesso! Te esperamos no dia *${day}/${month}/${year} às ${new_time}*. Qualquer dúvida, estou aqui! 😊`;
   }
 
   if (toolName === 'register_enrollment') {
@@ -954,16 +940,11 @@ async function executeTool(
     if (toolName === 'register_visit') {
       const { lead_name, lead_phone, scheduled_date, scheduled_time, notes } = args;
 
-      // Cria objeto de data real forçando offset de Brasília explicitamente
-      const targetDateObj = new Date(`${scheduled_date}T${scheduled_time}:00-03:00`);
-      if (isNaN(targetDateObj.getTime())) {
-        return '❌ Data ou horário informado é inválido.';
-      }
-      
-      const dbIso = targetDateObj.toISOString(); // Valor UTC real para o banco
-      const schedTime = targetDateObj.getTime();
+      // Salva literalmente a string que veio sem conversão
+      const dbLiteral = `${scheduled_date}T${scheduled_time}:00Z`;
+      const schedTime = new Date(dbLiteral).getTime();
 
-      // Verifica idempotência (janela de 30s baseada no timestamp UTC real)
+      // Verifica idempotência (janela de 30s baseada no timestamp da string literal)
       const windowStart = new Date(schedTime - 30 * 1000).toISOString();
       const windowEnd = new Date(schedTime + 30 * 1000).toISOString();
 
@@ -977,13 +958,9 @@ async function executeTool(
         .limit(1);
 
       if (existing && existing.length > 0) {
-        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${dbIso}`);
-        const dateObj = new Date(existing[0].scheduled_at);
-        const dateFormatted = dateObj.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
-        return `✅ Visita já estava agendada! ${lead_name}, confirmamos sua vinda para o dia ${dateFormatted}. Caso precise reagendar, conte comigo!`;
+        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${dbLiteral}`);
+        const [year, month, day, hour, min] = existing[0].scheduled_at.substring(0, 16).split(/[-T:]/);
+        return `✅ Visita já estava agendada! ${lead_name}, confirmamos sua vinda para o dia ${day}/${month}/${year} às ${hour}:${min}. Caso precise reagendar, conte comigo!`;
       }
 
       const { error } = await supabase.from('visit_appointments').insert({
@@ -991,7 +968,7 @@ async function executeTool(
         lead_id: leadId || null,
         lead_name,
         lead_phone: lead_phone || phone,
-        scheduled_at: dbIso, // Agora salvamos o ISO UTC REAL definitivo no banco TIMESTAMPTZ
+        scheduled_at: dbLiteral, // Salva na tora o que veio de texto
         notes: notes || null,
         status: 'scheduled',
       });
@@ -1001,14 +978,8 @@ async function executeTool(
         return '❌ Não consegui registrar sua visita. Por favor, tente novamente ou ligue para nós.';
       }
 
-    // Formata a data de forma amigável com fuso correto do Brasil
-    const realDateObj = new Date(schedTime); // O schedTime já tem o timestamp correto
-    const dateFormatted = realDateObj.toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    return `✅ Visita agendada com sucesso! ${lead_name}, te esperamos no dia ${dateFormatted}. Você receberá uma confirmação. Caso precise reagendar, é só nos chamar! 😊`;
+    const [year, month, day] = scheduled_date.split('-');
+    return `✅ Visita agendada com sucesso! ${lead_name}, te esperamos no dia ${day}/${month}/${year} às ${scheduled_time}. Você receberá uma confirmação. Caso precise reagendar, é só nos chamar! 😊`;
   }
 
   return '❌ Ação não reconhecida.';

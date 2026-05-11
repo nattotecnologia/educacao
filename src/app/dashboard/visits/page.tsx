@@ -207,7 +207,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
           lead_phone: editForm.lead_phone,
-          scheduled_at: new Date(`${editForm.scheduled_date}T${editForm.scheduled_time}:00`).toISOString(),
+          scheduled_at: `${editForm.scheduled_date}T${editForm.scheduled_time}:00Z`,
           notes: editForm.notes,
           status: editForm.status
         }),
@@ -354,7 +354,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ 
           ...form, 
-          scheduled_at: new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString(),
+          scheduled_at: `${scheduledDate}T${scheduledTime}:00Z`,
           lead_id: form.lead_id || null 
         }),
       });
@@ -868,10 +868,9 @@ export default function VisitsPage() {
                         className="agendar-btn" 
                         style={{ flex: 2, justifyContent: 'center', minWidth: '120px' }} 
                         onClick={() => {
-                          const dt = new Date(selectedVisit.scheduled_at);
                           setEditForm({
-                            scheduled_date: dt.toISOString().split('T')[0],
-                            scheduled_time: `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`,
+                            scheduled_date: selectedVisit.scheduled_at.substring(0, 10),
+                            scheduled_time: selectedVisit.scheduled_at.substring(11, 16),
                             lead_phone: selectedVisit.lead_phone,
                             notes: selectedVisit.notes || '',
                             status: selectedVisit.status
