@@ -432,7 +432,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           lead_phone: { type: 'string', description: 'Telefone (ja conhecido)' },
           scheduled_at: {
             type: 'string',
-            description: 'Data e hora da visita. OBRIGATORIO: Coloque EXATAMENTE o numero da hora que o usuario pediu no formato YYYY-MM-DDTHH:mm:00. NUNCA some ou subtraia horarios. NAO coloque sufixo de fuso horario (nem Z, nem -03:00). Apenas a hora pura.',
+            description: 'Data e hora da visita. OBRIGATORIO: Use SEMPRE o fuso horário do Brasil (-03:00) no final, seguindo exatamente o formato: YYYY-MM-DDTHH:mm:00-03:00.',
           },
           notes: { type: 'string', description: 'Observacoes ou interesses do visitante (opcional)' },
         },
@@ -485,7 +485,7 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           visit_id: { type: 'string', description: 'ID da visita a reagendar (obtido via list_visits)' },
           new_scheduled_at: {
             type: 'string',
-            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00.',
+            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00-03:00.',
           },
         },
         required: ['visit_id', 'new_scheduled_at'],
@@ -756,8 +756,11 @@ async function executeTool(
     };
 
     const lines = visits.map((v) => {
-      const [year, month, day, hour, min] = v.scheduled_at.substring(0, 16).split(/[-T:]/);
-      const dateStr = `${day}/${month}/${year} às ${hour}:${min}`;
+      const realDateObj = new Date(v.scheduled_at);
+      const dateStr = realDateObj.toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
       const statusLabel = statusLabels[v.status] || v.status;
       const shortId = v.id.substring(0, 8);
       return `• *${dateStr}* — ${statusLabel} (ID: ${shortId})`;
@@ -818,8 +821,13 @@ async function executeTool(
       return '❌ Ocorreu um erro ao cancelar. Por favor, tente novamente.';
     }
 
-    const [year, month, day, hour, min] = visit.scheduled_at.substring(0, 16).split(/[-T:]/);
-    return `✅ Visita do dia *${day}/${month}/${year} às ${hour}:${min}* cancelada com sucesso. Se quiser agendar uma nova data, é só me chamar!`;
+    const realDateObj = new Date(visit.scheduled_at);
+    const dateFormatted = realDateObj.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    return `✅ Visita do dia *${dateFormatted}* cancelada com sucesso. Se quiser agendar uma nova data, é só me chamar!`;
   }
 
   // ── reschedule_visit ──────────────────────────────────────────────────────
@@ -864,16 +872,13 @@ async function executeTool(
     if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
     if (visit.status === 'done') return '❌ Não é possível reagendar uma visita que já foi realizada.';
 
-    // Normaliza a data (remove sufixos de fuso horário se existirem, mantendo o padrão local + Z)
-    const localTimeString = new_scheduled_at.includes('T') 
-      ? new_scheduled_at.split('.')[0].substring(0, 19)
-      : new_scheduled_at;
-    
-    const newDateUtc = localTimeString.endsWith('Z') ? localTimeString : localTimeString + 'Z';
+    // Normaliza para UTC ISO real
+    const realDateObj = new Date(new_scheduled_at);
+    const dateIsoUtc = !isNaN(realDateObj.getTime()) ? realDateObj.toISOString() : new_scheduled_at;
 
     const { error } = await supabase
       .from('visit_appointments')
-      .update({ scheduled_at: newDateUtc, status: 'scheduled' })
+      .update({ scheduled_at: dateIsoUtc, status: 'scheduled' })
       .eq('id', visit.id);
 
     if (error) {
@@ -881,8 +886,13 @@ async function executeTool(
       return '❌ Ocorreu um erro ao reagendar. Por favor, tente novamente.';
     }
 
-    const [year, month, day, hour, min] = localTimeString.split(/[-T:]/);
-    return `✅ Visita reagendada com sucesso! Te esperamos no dia *${day}/${month}/${year} às ${hour}:${min}*. Qualquer dúvida, estou aqui! 😊`;
+    // Garante leitura amigável independente de como foi salvo
+    const displayDate = new Date(dateIsoUtc).toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    
+    return `✅ Visita reagendada com sucesso! Te esperamos no dia *${displayDate}*. Qualquer dúvida, estou aqui! 😊`;
   }
 
   if (toolName === 'register_enrollment') {
@@ -1492,9 +1502,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Tenta normalizar a data para ISO caso venha em formato amigável
-        if (toolArgs.scheduled_at) {
+        const targetDateKey = toolArgs.scheduled_at ? 'scheduled_at' : toolArgs.new_scheduled_at ? 'new_scheduled_at' : null;
+
+        if (targetDateKey) {
           try {
-            let dateRaw = toolArgs.scheduled_at;
+            let dateRaw = toolArgs[targetDateKey];
             // Se o formato não contiver offset (+ ou - ou Z no final), força o offset de Brasília (-03:00)
             if (dateRaw.includes('T') && !dateRaw.endsWith('Z') && !dateRaw.match(/[-+]\d{2}:?\d{2}$/)) {
               dateRaw = dateRaw.substring(0, 19) + '-03:00';
@@ -1502,10 +1514,10 @@ export async function POST(request: NextRequest) {
             
             const dateObj = new Date(dateRaw);
             if (!isNaN(dateObj.getTime())) {
-              toolArgs.scheduled_at = dateObj.toISOString();
+              toolArgs[targetDateKey] = dateObj.toISOString();
             }
           } catch (e) {
-             console.warn('[Webhook] Data inválida recebida da IA:', toolArgs.scheduled_at);
+             console.warn('[Webhook] Data inválida recebida da IA:', toolArgs[targetDateKey]);
           }
         }
 
