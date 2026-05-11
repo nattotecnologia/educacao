@@ -125,7 +125,13 @@ export default function NewCampaignPage() {
     if (promotionId) {
       const promo = promotions.find(p => p.id === promotionId);
       if (promo) {
-         text += `\n\n*${promo.name}*\n${promo.description || ''}`;
+         text += `\n\n*${promo.name}*`;
+         if (promo.description) text += `\n${promo.description}`;
+         if (promo.discount_percentage) {
+           text += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
+         } else if (promo.discount_value) {
+           text += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+         }
       }
     }
     return text;

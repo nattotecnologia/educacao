@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   console.log('[Cron] Iniciando processamento de Campanhas...');
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const now = new Date().toISOString();
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T') + 'Z'; // Força 'agora' local fingindo ser UTC, para bater com o banco
 
   try {
     // 1. Busca campanhas agendadas que já podem rodar
@@ -71,12 +71,18 @@ export async function GET(request: NextRequest) {
       if (campaign.promotion_id) {
         const { data: promo } = await supabase
           .from('promotions')
-          .select('name, description')
+          .select('name, description, discount_percentage, discount_value')
           .eq('id', campaign.promotion_id)
           .single();
         
         if (promo) {
-          promoText = `\n\n🎁 *${promo.name}*\n${promo.description || ''}`;
+          promoText = `\n\n🎁 *${promo.name}*`;
+          if (promo.description) promoText += `\n${promo.description}`;
+          if (promo.discount_percentage) {
+            promoText += `\n🔥 *Desconto especial: ${promo.discount_percentage}% de desconto!*`;
+          } else if (promo.discount_value) {
+            promoText += `\n🔥 *Desconto especial: R$ ${promo.discount_value} de desconto!*`;
+          }
         }
       }
 

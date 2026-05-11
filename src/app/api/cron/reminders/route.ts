@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
 
   console.log('[Cron] Iniciando processamento de Lembretes de Visita...');
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const now = new Date();
+  const nowBrtStr = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T');
+  const now = new Date(nowBrtStr + 'Z'); // Alinha o Agora do servidor ao fuso fictício "UTC-Ingênuo" gravado no banco
 
   try {
     // 1. Busca instituições com lembretes ativos
