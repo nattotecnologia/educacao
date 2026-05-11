@@ -57,10 +57,8 @@ export default function NewCampaignPage() {
             if (campaignData.scheduled_at) {
               setScheduleType('later');
               // Formata pra o datetime-local
-              const date = new Date(campaignData.scheduled_at);
-              const pad = (n:number) => n.toString().padStart(2, '0');
-              const formatted = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-              setScheduledAt(formatted);
+              // Mantém a literalidade exata do banco salvando na string
+              setScheduledAt(campaignData.scheduled_at.substring(0, 16));
             }
           }
         }
@@ -90,7 +88,7 @@ export default function NewCampaignPage() {
     let finalSchedule = null;
     if (scheduleType === 'later') {
       if (!scheduledAt) return addNotification({ type: 'error', title: 'Atenção', message: 'Selecione a data e hora do agendamento' });
-      finalSchedule = new Date(scheduledAt).toISOString();
+      finalSchedule = `${scheduledAt}:00Z`; // Salva literal sem conversões de fuso
     }
 
     setSaving(true);

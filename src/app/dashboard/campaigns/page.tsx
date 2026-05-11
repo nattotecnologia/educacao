@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Megaphone, Calendar, CheckCircle2, Loader2, PlayCircle, Clock, Save, BellRing, Edit, Trash2 } from 'lucide-react';
+import { Plus, Megaphone, Calendar, CheckCircle2, Loader2, PlayCircle, Clock, Save, BellRing, Edit, Trash2, Eye, X } from 'lucide-react';
 import styles from './Campaigns.module.css';
-import { getCampaigns, getRemindersSettings, updateRemindersSettings, deleteCampaign } from './actions';
+import { getCampaigns, getRemindersSettings, updateRemindersSettings, deleteCampaign, getCampaignLogs } from './actions';
 import { useNotification } from '@/contexts/NotificationContext';
+import { maskPhone } from '@/utils/masks';
 
 export default function CampaignsPage() {
   const { addNotification } = useNotification();
@@ -21,6 +22,11 @@ export default function CampaignsPage() {
   const [reminderMessage, setReminderMessage] = useState('');
   const [reminderActive, setReminderActive] = useState(true);
   const [savingReminder, setSavingReminder] = useState(false);
+
+  // Modal logs
+  const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
+  const [campaignLogs, setCampaignLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -68,6 +74,19 @@ export default function CampaignsPage() {
       addNotification({ type: 'success', title: 'Sucesso', message: 'Campanha excluída.' });
     } catch (err) {
       addNotification({ type: 'error', title: 'Erro', message: 'Não foi possível excluir a campanha.' });
+    }
+  };
+
+  const handleViewLogs = async (campaign: any) => {
+    setSelectedCampaign(campaign);
+    setLoadingLogs(true);
+    try {
+      const logs = await getCampaignLogs(campaign.id);
+      setCampaignLogs(logs || []);
+    } catch (err) {
+      addNotification({ type: 'error', title: 'Erro', message: 'Não foi possível carregar relatório.' });
+    } finally {
+      setLoadingLogs(false);
     }
   };
 
@@ -138,13 +157,20 @@ export default function CampaignsPage() {
                       <td>{getStatusBadge(camp.status)}</td>
                       <td>
                         {camp.scheduled_at 
-                          ? new Date(camp.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                          ? `${camp.scheduled_at.substring(8, 10)}/${camp.scheduled_at.substring(5, 7)} ${camp.scheduled_at.substring(11, 16)}`
                           : <span style={{color: 'var(--text-muted)'}}>-</span>
                         }
                       </td>
                       <td>{new Date(camp.created_at).toLocaleDateString('pt-BR')}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            onClick={() => handleViewLogs(camp)} 
+                            className={styles.actionBtn} 
+                            title="Ver Relatório"
+                          >
+                            <Eye size={16} />
+                          </button>
                           {['draft', 'scheduled'].includes(camp.status) && (
                             <Link href={`/dashboard/campaigns/new?edit=${camp.id}`} className={styles.actionBtn} title="Editar">
                               <Edit size={16} />
@@ -180,7 +206,7 @@ export default function CampaignsPage() {
 
       {activeTab === 'lembretes' && (
         <div className={styles.tabContent}>
-          <form onSubmit={handleSaveReminder} className={styles.formCard} style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <form onSubmit={handleSaveReminder} className={styles.formCard} style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem' }}>
               <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '12px', color: 'var(--accent-primary)' }}>
                 <BellRing size={24} />
@@ -191,7 +217,7 @@ export default function CampaignsPage() {
               </div>
               
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: reminderActive ? 'var(--success)' : 'var(--text-muted)' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: reminderActive ? '#10b981' : 'var(--text-muted)' }}>
                   {reminderActive ? 'Ativado' : 'Desativado'}
                 </span>
                 <label className={styles.toggleSwitch}>
@@ -263,6 +289,77 @@ export default function CampaignsPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {/* Modal de Relatório */}
+      {selectedCampaign && (
+        <div className={styles.modalOverlay} onClick={() => setSelectedCampaign(null)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Relatório: {selectedCampaign.name}</h3>
+              <button className={styles.closeBtn} onClick={() => setSelectedCampaign(null)}><X size={20} /></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ flex: 1, background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total na Fila</span>
+                  <h4 style={{ fontSize: '1.5rem', margin: '0.2rem 0' }}>{campaignLogs.length}</h4>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#10b981' }}>Enviados</span>
+                  <h4 style={{ fontSize: '1.5rem', margin: '0.2rem 0', color: '#10b981' }}>{campaignLogs.filter(l => l.status === 'sent').length}</h4>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>Falhas</span>
+                  <h4 style={{ fontSize: '1.5rem', margin: '0.2rem 0', color: '#ef4444' }}>{campaignLogs.filter(l => l.status === 'failed').length}</h4>
+                </div>
+              </div>
+
+              <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem' }}>Lista de Destinatários</h4>
+              
+              {loadingLogs ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={24} className="animate-spin" /></div>
+              ) : campaignLogs.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>Nenhum registro encontrado na fila.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className={styles.logTable}>
+                    <thead>
+                      <tr>
+                        <th>Lead</th>
+                        <th>Telefone</th>
+                        <th>Status</th>
+                        <th>Data/Erro</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaignLogs.map(log => (
+                        <tr key={log.id}>
+                          <td style={{ fontWeight: 500 }}>{log.leads?.name || 'Desconhecido'}</td>
+                          <td>{maskPhone(log.leads?.phone || '')}</td>
+                          <td>
+                            <span style={{ 
+                              fontSize: '0.7rem', 
+                              fontWeight: 600, 
+                              padding: '0.2rem 0.5rem', 
+                              borderRadius: '4px',
+                              background: log.status === 'sent' ? 'rgba(16, 185, 129, 0.15)' : log.status === 'failed' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,100,100,0.15)',
+                              color: log.status === 'sent' ? '#10b981' : log.status === 'failed' ? '#ef4444' : 'var(--text-muted)'
+                            }}>
+                              {log.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '0.75rem', color: log.status === 'failed' ? '#ef4444' : 'var(--text-muted)' }}>
+                            {log.status === 'sent' && log.sent_at ? new Date(log.sent_at).toLocaleString('pt-BR') : log.error_log || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

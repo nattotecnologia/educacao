@@ -289,3 +289,27 @@ export async function updateCampaign(id: string, data: any) {
 
   return { success: true };
 }
+
+export async function getCampaignLogs(campaignId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autorizado");
+
+  const { data, error } = await supabase
+    .from('campaign_logs')
+    .select(`
+      id,
+      status,
+      sent_at,
+      error_log,
+      leads (
+        name,
+        phone
+      )
+    `)
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
