@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // 2. Processa campanhas 'running'
     const { data: runningCampaigns } = await supabase
       .from('campaigns')
-      .select('id, institution_id, message_template, batch_size, delay_ms')
+      .select('id, institution_id, message_template, batch_size, delay_ms, promotion_id')
       .eq('status', 'running');
 
     if (!runningCampaigns || runningCampaigns.length === 0) {
@@ -64,6 +64,20 @@ export async function GET(request: NextRequest) {
       if (!institution || !institution.evolution_instance_name) {
         console.error(`[Cron] Instituição inválida para campanha ${campaign.id}`);
         continue;
+      }
+
+      // Busca detalhes da promoção se houver
+      let promoText = '';
+      if (campaign.promotion_id) {
+        const { data: promo } = await supabase
+          .from('promotions')
+          .select('name, description')
+          .eq('id', campaign.promotion_id)
+          .single();
+        
+        if (promo) {
+          promoText = `\n\n🎁 *${promo.name}*\n${promo.description || ''}`;
+        }
       }
 
       const evoUrl = (institution as any).evolution_api_url; // will be undefined, which is fine
@@ -99,6 +113,11 @@ export async function GET(request: NextRequest) {
         // Formata a mensagem com placeholders
         let text = campaign.message_template;
         text = text.replace(/{nome}/gi, lead.name || 'Cliente');
+
+        // Anexa dados da promoção se existir
+        if (promoText) {
+          text += promoText;
+        }
 
         // Dispara mensagem
         try {

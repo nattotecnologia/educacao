@@ -194,13 +194,13 @@ export default function CampaignsPage() {
                 <span style={{ fontSize: '0.85rem', fontWeight: 500, color: reminderActive ? 'var(--success)' : 'var(--text-muted)' }}>
                   {reminderActive ? 'Ativado' : 'Desativado'}
                 </span>
-                <label className={styles.switch}>
+                <label className={styles.toggleSwitch}>
                   <input 
                     type="checkbox" 
                     checked={reminderActive} 
                     onChange={(e) => setReminderActive(e.target.checked)}
                   />
-                  <span className={styles.slider}></span>
+                  <span className={styles.toggleSlider}></span>
                 </label>
               </div>
             </div>

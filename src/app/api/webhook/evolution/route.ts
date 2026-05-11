@@ -1589,7 +1589,22 @@ export async function POST(request: NextRequest) {
         'Desculpe, estou com dificuldades no momento. Um atendente irá te ajudar em breve.';
     }
 
-    console.log(`[Webhook] Resposta da IA: "${botMessage.substring(0, 100)}..."`);
+    // --- SANITIZAÇÃO ROBUSTA DA MENSAGEM PARA WHATSAPP ---
+    if (botMessage) {
+      // 1. Substitui excesso de asteriscos consecutivos (ex: ** ou ***) por apenas um *
+      botMessage = botMessage.replace(/\*\*\*+/g, '*').replace(/\*\*/g, '*');
+      
+      // 2. Remove asteriscos isolados/quebrados que sobraram (ex: "Foi * *" ou "Olá * ")
+      botMessage = botMessage.replace(/\s\*\s\*/g, ''); 
+      botMessage = botMessage.replace(/\s\*\s/g, ' '); 
+      
+      // 3. Remove asteriscos perdidos pendurados no final da string (ex: "Conte *")
+      botMessage = botMessage.replace(/\s\*$/g, '').replace(/\*$/g, '');
+      
+      botMessage = botMessage.trim();
+    }
+
+    console.log(`[Webhook] Resposta da IA Sanitizada: "${botMessage.substring(0, 100)}..."`);
 
     // 15a. Incrementa contador de tokens da instituição (fire-and-forget)
     if (totalTokensUsed > 0) {

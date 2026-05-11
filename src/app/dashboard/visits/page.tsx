@@ -207,7 +207,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
           lead_phone: editForm.lead_phone,
-          scheduled_at: `${editForm.scheduled_date}T${editForm.scheduled_time}:00Z`,
+          scheduled_at: new Date(`${editForm.scheduled_date}T${editForm.scheduled_time}:00`).toISOString(),
           notes: editForm.notes,
           status: editForm.status
         }),
@@ -354,7 +354,7 @@ export default function VisitsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ 
           ...form, 
-          scheduled_at: `${scheduledDate}T${scheduledTime}:00Z`,
+          scheduled_at: new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString(),
           lead_id: form.lead_id || null 
         }),
       });
