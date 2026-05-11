@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       // Pega dados da instituição
       const { data: institution } = await supabase
         .from('institutions')
-        .select('evolution_instance_name, evolution_api_key, evolution_api_url')
+        .select('evolution_instance_name, evolution_api_key')
         .eq('id', campaign.institution_id)
         .single();
 
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const evoUrl = institution.evolution_api_url;
+      const evoUrl = (institution as any).evolution_api_url; // will be undefined, which is fine
       const evoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : process.env.EVOLUTION_GLOBAL_APIKEY || '';
       
       // Busca logs pendentes desta campanha limitados pelo batch_size

@@ -168,14 +168,14 @@ export async function getRemindersSettings() {
 
   const { data } = await supabase
     .from('institutions')
-    .select('visit_reminder_minutes, visit_reminder_message')
+    .select('visit_reminder_minutes, visit_reminder_message, visit_reminder_active')
     .eq('id', profile.institution_id)
     .single();
 
   return data;
 }
 
-export async function updateRemindersSettings(minutes: number, message: string) {
+export async function updateRemindersSettings(minutes: number, message: string, active: boolean) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -193,10 +193,99 @@ export async function updateRemindersSettings(minutes: number, message: string) 
     .from('institutions')
     .update({ 
       visit_reminder_minutes: minutes,
-      visit_reminder_message: message
+      visit_reminder_message: message,
+      visit_reminder_active: active
     })
     .eq('id', profile.institution_id);
 
   if (error) throw error;
+  return { success: true };
+}
+
+export async function getCampaignById(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autorizado");
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCampaign(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autorizado");
+
+  const { error } = await supabase
+    .from('campaigns')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return { success: true };
+}
+
+export async function updateCampaign(id: string, data: any) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autorizado");
+
+  // 1. Atualiza a campanha
+  const { error: campaignError } = await supabase
+    .from('campaigns')
+    .update({
+      name: data.name,
+      status: data.scheduled_at ? 'scheduled' : 'running',
+      scheduled_at: data.scheduled_at || null,
+      message_template: data.message_template,
+      promotion_id: data.promotion_id || null,
+      target_audience: data.target_audience,
+      batch_size: data.batch_size || 20,
+      delay_ms: data.delay_ms || 2000,
+    })
+    .eq('id', id);
+
+  if (campaignError) throw campaignError;
+
+  // 2. Recalcula logs apenas se a campanha ainda não começou!
+  // Apaga logs pendentes e cria novos com o novo público
+  await supabase.from('campaign_logs').delete().eq('campaign_id', id).eq('status', 'pending');
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('institution_id')
+    .eq('id', user.id)
+    .single();
+
+  let leadIdsToTarget: string[] = [];
+  if (data.target_audience.type === 'all') {
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('institution_id', profile?.institution_id);
+    if (leads) leadIdsToTarget = leads.map((l:any) => l.id);
+  } else {
+    leadIdsToTarget = data.target_audience.lead_ids || [];
+  }
+
+  if (leadIdsToTarget.length > 0) {
+    const logsToInsert = leadIdsToTarget.map(lead_id => ({
+      campaign_id: id,
+      lead_id,
+      status: 'pending'
+    }));
+    const chunkSize = 1000;
+    for (let i = 0; i < logsToInsert.length; i += chunkSize) {
+      const chunk = logsToInsert.slice(i, i + chunkSize);
+      await supabase.from('campaign_logs').insert(chunk);
+    }
+  }
+
   return { success: true };
 }

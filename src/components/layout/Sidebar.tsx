@@ -17,7 +17,8 @@ import {
   GraduationCap,
   CalendarDays,
   Tag,
-  DollarSign
+  DollarSign,
+  Megaphone
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -58,6 +59,7 @@ export default function Sidebar() {
     { name: 'Agendamentos', icon: CalendarDays, path: '/dashboard/visits', group: 'academic' },
     { name: 'Agentes IA', icon: Bot, path: '/dashboard/agents', group: 'automation' },
     { name: 'WhatsApp', icon: Smartphone, path: '/dashboard/whatsapp', group: 'automation' },
+    { name: 'Central de Disparos', icon: Megaphone, path: '/dashboard/campaigns', group: 'automation' },
     { name: 'Configurações', icon: Settings, path: '/dashboard/settings', group: 'system' },
   ];
 

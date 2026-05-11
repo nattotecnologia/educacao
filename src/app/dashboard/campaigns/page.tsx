@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Megaphone, Calendar, CheckCircle2, Loader2, PlayCircle, Clock, Save, BellRing } from 'lucide-react';
+import { Plus, Megaphone, Calendar, CheckCircle2, Loader2, PlayCircle, Clock, Save, BellRing, Edit, Trash2 } from 'lucide-react';
 import styles from './Campaigns.module.css';
-import { getCampaigns, getRemindersSettings, updateRemindersSettings } from './actions';
+import { getCampaigns, getRemindersSettings, updateRemindersSettings, deleteCampaign } from './actions';
 import { useNotification } from '@/contexts/NotificationContext';
 
 export default function CampaignsPage() {
@@ -19,6 +19,7 @@ export default function CampaignsPage() {
   // States - Reminders Tab
   const [reminderMinutes, setReminderMinutes] = useState(120);
   const [reminderMessage, setReminderMessage] = useState('');
+  const [reminderActive, setReminderActive] = useState(true);
   const [savingReminder, setSavingReminder] = useState(false);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function CampaignsPage() {
         if (reminderData) {
           setReminderMinutes(reminderData.visit_reminder_minutes || 120);
           setReminderMessage(reminderData.visit_reminder_message || '');
+          setReminderActive(reminderData.visit_reminder_active ?? true);
         }
       } catch (error) {
         console.error(error);
@@ -48,12 +50,24 @@ export default function CampaignsPage() {
     e.preventDefault();
     setSavingReminder(true);
     try {
-      await updateRemindersSettings(reminderMinutes, reminderMessage);
+      await updateRemindersSettings(reminderMinutes, reminderMessage, reminderActive);
       addNotification({ type: 'success', title: 'Salvo', message: 'Configurações de lembrete atualizadas!' });
     } catch (err) {
       addNotification({ type: 'error', title: 'Erro', message: 'Falha ao salvar lembrete' });
     } finally {
       setSavingReminder(false);
+    }
+  };
+
+  const handleDeleteCampaign = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta campanha permanentemente?')) return;
+    
+    try {
+      await deleteCampaign(id);
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+      addNotification({ type: 'success', title: 'Sucesso', message: 'Campanha excluída.' });
+    } catch (err) {
+      addNotification({ type: 'error', title: 'Erro', message: 'Não foi possível excluir a campanha.' });
     }
   };
 
@@ -113,6 +127,7 @@ export default function CampaignsPage() {
                     <th>Status</th>
                     <th>Agendado Para</th>
                     <th>Criada em</th>
+                    <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -128,6 +143,23 @@ export default function CampaignsPage() {
                         }
                       </td>
                       <td>{new Date(camp.created_at).toLocaleDateString('pt-BR')}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {['draft', 'scheduled'].includes(camp.status) && (
+                            <Link href={`/dashboard/campaigns/new?edit=${camp.id}`} className={styles.actionBtn} title="Editar">
+                              <Edit size={16} />
+                            </Link>
+                          )}
+                          <button 
+                            onClick={() => handleDeleteCampaign(camp.id)} 
+                            className={styles.actionBtn} 
+                            style={{ color: 'var(--error)' }}
+                            title="Excluir"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -156,6 +188,20 @@ export default function CampaignsPage() {
               <div>
                 <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 600 }}>Lembrete de Visita</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Configure o aviso automático que os leads receberão antes da visita na unidade.</p>
+              </div>
+              
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: reminderActive ? 'var(--success)' : 'var(--text-muted)' }}>
+                  {reminderActive ? 'Ativado' : 'Desativado'}
+                </span>
+                <label className={styles.switch}>
+                  <input 
+                    type="checkbox" 
+                    checked={reminderActive} 
+                    onChange={(e) => setReminderActive(e.target.checked)}
+                  />
+                  <span className={styles.slider}></span>
+                </label>
               </div>
             </div>
 

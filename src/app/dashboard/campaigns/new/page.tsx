@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotification } from '@/contexts/NotificationContext';
 import { ArrowLeft, Send, Save, Loader2, Users, Megaphone, ShieldAlert, Clock } from 'lucide-react';
 import Link from 'next/link';
 import styles from '../Campaigns.module.css';
-import { createCampaign, getActivePromotions, getLeadsForCampaign } from '../actions';
+import { createCampaign, getActivePromotions, getLeadsForCampaign, getCampaignById, updateCampaign } from '../actions';
 
 export default function NewCampaignPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
   const { addNotification } = useNotification();
   
   const [loading, setLoading] = useState(true);
@@ -40,6 +42,28 @@ export default function NewCampaignPage() {
         ]);
         setPromotions(promos || []);
         setLeads(leadsData || []);
+
+        if (editId) {
+          const campaignData = await getCampaignById(editId);
+          if (campaignData) {
+            setName(campaignData.name || '');
+            setMessageTemplate(campaignData.message_template || '');
+            setTargetType(campaignData.target_audience?.type || 'all');
+            setSelectedLeads(campaignData.target_audience?.lead_ids || []);
+            setPromotionId(campaignData.promotion_id || '');
+            setBatchSize(campaignData.batch_size || 20);
+            setMessageDelay((campaignData.delay_ms || 2000) / 1000);
+            
+            if (campaignData.scheduled_at) {
+              setScheduleType('later');
+              // Formata pra o datetime-local
+              const date = new Date(campaignData.scheduled_at);
+              const pad = (n:number) => n.toString().padStart(2, '0');
+              const formatted = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+              setScheduledAt(formatted);
+            }
+          }
+        }
       } catch (err) {
         addNotification({ type: 'error', title: 'Erro', message: 'Falha ao carregar dados' });
       } finally {
@@ -47,7 +71,7 @@ export default function NewCampaignPage() {
       }
     }
     loadData();
-  }, [addNotification]);
+  }, [addNotification, editId]);
 
   const handleToggleLead = (id: string) => {
     if (selectedLeads.includes(id)) {
@@ -71,7 +95,7 @@ export default function NewCampaignPage() {
 
     setSaving(true);
     try {
-      await createCampaign({
+      const payload = {
         name,
         message_template: messageTemplate,
         promotion_id: promotionId || null,
@@ -79,9 +103,16 @@ export default function NewCampaignPage() {
         batch_size: batchSize,
         delay_ms: messageDelay * 1000,
         scheduled_at: finalSchedule
-      });
+      };
+
+      if (editId) {
+        await updateCampaign(editId, payload);
+        addNotification({ type: 'success', title: 'Atualizada', message: 'Campanha atualizada com sucesso.' });
+      } else {
+        await createCampaign(payload);
+        addNotification({ type: 'success', title: 'Sucesso', message: scheduleType === 'now' ? 'Campanha iniciada!' : 'Campanha agendada!' });
+      }
       
-      addNotification({ type: 'success', title: 'Sucesso', message: scheduleType === 'now' ? 'Campanha iniciada com sucesso!' : 'Campanha agendada com sucesso!' });
       router.push('/dashboard/campaigns');
     } catch (err: any) {
       addNotification({ type: 'error', title: 'Erro', message: err.message || 'Falha ao salvar campanha' });
@@ -111,7 +142,9 @@ export default function NewCampaignPage() {
           <Link href="/dashboard/campaigns" className={styles.title} style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
             <ArrowLeft size={18} /> Voltar
           </Link>
-          <h1 className={styles.title} style={{ marginTop: '0.5rem' }}><Megaphone size={28} /> Nova Campanha</h1>
+          <h1 className={styles.title} style={{ marginTop: '0.5rem' }}>
+            <Megaphone size={28} /> {editId ? 'Editar Campanha' : 'Nova Campanha'}
+          </h1>
         </div>
       </header>
 

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // Vamos buscar todas as visitas marcadas que estão próximas, com JOIN na instituição
     const { data: visits } = await supabase
       .from('visit_appointments')
-      .select('id, lead_id, lead_phone, lead_name, scheduled_at, institution_id, institutions(visit_reminder_minutes, visit_reminder_message, name, evolution_instance_name, evolution_api_key, evolution_api_url)')
+      .select('id, lead_id, lead_phone, lead_name, scheduled_at, institution_id, institutions(visit_reminder_minutes, visit_reminder_message, visit_reminder_active, name, evolution_instance_name, evolution_api_key)')
       .eq('status', 'scheduled')
       .is('reminder_sent_at', null)
       .gt('scheduled_at', now.toISOString()); // Filtra visitas no futuro
@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     for (const visit of visits) {
       const institution = visit.institutions as any;
       if (!institution || !institution.evolution_instance_name) continue;
+      if (institution.visit_reminder_active === false) continue; // Pula se os lembretes estão desativados nesta instituição
 
       const minutesBefore = institution.visit_reminder_minutes || 120;
       
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
           .replace(/{horario}/gi, localTime)
           .replace(/{instituicao}/gi, institution.name || 'nossa instituição');
 
-        const evoUrl = institution.evolution_api_url;
+        const evoUrl = institution.evolution_api_url; // will be undefined, which falls back properly
         const evoKey = institution.evolution_api_key ? decrypt(institution.evolution_api_key) : process.env.EVOLUTION_GLOBAL_APIKEY || '';
 
         try {
