@@ -91,7 +91,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         }, (payload) => {
           const leadName = payload.new.lead_name || 'Um prospecto';
           const scheduledAt = payload.new.scheduled_at
-            ? new Date(payload.new.scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            ? `${payload.new.scheduled_at.substring(8, 10)}/${payload.new.scheduled_at.substring(5, 7)} ${payload.new.scheduled_at.substring(11, 16)}`
             : '';
           addNotification({
             title: '📅 Visita Agendada',
