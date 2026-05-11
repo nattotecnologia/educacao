@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // Vamos buscar todas as visitas marcadas que estão próximas, com JOIN na instituição
     const { data: visits } = await supabase
       .from('visit_appointments')
-      .select('id, lead_id, lead_phone, lead_name, scheduled_at, institution_id, institutions(visit_reminder_hours, visit_reminder_message, name, evolution_instance_name, evolution_api_key, evolution_api_url)')
+      .select('id, lead_id, lead_phone, lead_name, scheduled_at, institution_id, institutions(visit_reminder_minutes, visit_reminder_message, name, evolution_instance_name, evolution_api_key, evolution_api_url)')
       .eq('status', 'scheduled')
       .is('reminder_sent_at', null)
       .gt('scheduled_at', now.toISOString()); // Filtra visitas no futuro
@@ -41,11 +41,11 @@ export async function GET(request: NextRequest) {
       const institution = visit.institutions as any;
       if (!institution || !institution.evolution_instance_name) continue;
 
-      const hoursBefore = institution.visit_reminder_hours || 2;
+      const minutesBefore = institution.visit_reminder_minutes || 120;
       
       // Verifica se já está na hora de enviar o lembrete
       const visitTime = new Date(visit.scheduled_at);
-      const reminderTime = new Date(visitTime.getTime() - (hoursBefore * 60 * 60 * 1000));
+      const reminderTime = new Date(visitTime.getTime() - (minutesBefore * 60 * 1000));
 
       if (now >= reminderTime) {
         // Enviar lembrete!

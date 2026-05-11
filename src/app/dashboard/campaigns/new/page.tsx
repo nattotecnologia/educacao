@@ -167,7 +167,12 @@ export default function NewCampaignPage() {
             <h2 className={styles.sectionTitle}>Mensagem e Promoção</h2>
             
             <div className={styles.inputGroup}>
-              <label className={styles.label}>Promoção Ativa (Opcional)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className={styles.label}>Promoção Ativa (Opcional)</label>
+                <Link href="/dashboard/promotions" style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600 }}>
+                  + Nova Promoção
+                </Link>
+              </div>
               <select value={promotionId} onChange={e => setPromotionId(e.target.value)} className={styles.input}>
                 <option value="">Nenhuma promoção vinculada</option>
                 {promotions.map(p => (

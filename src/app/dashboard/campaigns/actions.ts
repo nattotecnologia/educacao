@@ -151,3 +151,52 @@ export async function createCampaign(data: any) {
 
   return { success: true, campaign };
 }
+
+export async function getRemindersSettings() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('institution_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.institution_id) return null;
+
+  const { data } = await supabase
+    .from('institutions')
+    .select('visit_reminder_minutes, visit_reminder_message')
+    .eq('id', profile.institution_id)
+    .single();
+
+  return data;
+}
+
+export async function updateRemindersSettings(minutes: number, message: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Não autorizado");
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('institution_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.institution_id) throw new Error("Instituição não encontrada");
+
+  const { error } = await supabase
+    .from('institutions')
+    .update({ 
+      visit_reminder_minutes: minutes,
+      visit_reminder_message: message
+    })
+    .eq('id', profile.institution_id);
+
+  if (error) throw error;
+  return { success: true };
+}

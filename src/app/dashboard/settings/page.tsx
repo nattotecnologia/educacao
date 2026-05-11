@@ -193,38 +193,6 @@ export default function SettingsPage() {
                   placeholder="Escreva detalhes sobre a instituição. Essas informações serão usadas pela Inteligência Artificial para responder dúvidas dos leads."
                 />
               </div>
-
-              <div className={styles.inputGroup} style={{ marginTop: '1rem' }}>
-                <label className={styles.label}>Lembrete de Visitas Automático (Horas de antecedência)</label>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <input 
-                    type="number" 
-                    min="1"
-                    max="72"
-                    value={institution.visit_reminder_hours || 2} 
-                    onChange={(e) => setInstitution({...institution, visit_reminder_hours: parseInt(e.target.value) || 2})}
-                    className={styles.input} 
-                    style={{ maxWidth: '120px' }}
-                  />
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    O sistema enviará um lembrete no WhatsApp do lead essas horas antes do horário marcado.
-                  </span>
-                </div>
-              </div>
-
-              <div className={styles.inputGroup} style={{ marginTop: '1rem' }}>
-                <label className={styles.label}>Mensagem do Lembrete de Visita</label>
-                <textarea 
-                  value={institution.visit_reminder_message || ''} 
-                  onChange={(e) => setInstitution({...institution, visit_reminder_message: e.target.value})}
-                  className={styles.input}
-                  style={{ minHeight: '100px', resize: 'vertical' }}
-                  placeholder="Olá {nome}! Passando para lembrar da sua visita agendada conosco hoje às {horario} na {instituicao}! Te esperamos!"
-                />
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.5rem', display: 'block' }}>
-                  Variáveis disponíveis: <code>{'{nome}'}</code>, <code>{'{horario}'}</code>, <code>{'{instituicao}'}</code>
-                </span>
-              </div>
             </div>
           </section>
         )}
