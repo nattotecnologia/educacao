@@ -430,13 +430,17 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         properties: {
           lead_name: { type: 'string', description: 'Nome do interessado' },
           lead_phone: { type: 'string', description: 'Telefone (ja conhecido)' },
-          scheduled_at: {
+          scheduled_date: {
             type: 'string',
-            description: 'Data e hora da visita. OBRIGATORIO: Use SEMPRE o fuso horário do Brasil (-03:00) no final, seguindo exatamente o formato: YYYY-MM-DDTHH:mm:00-03:00.',
+            description: 'Data da visita no formato YYYY-MM-DD exato baseado no calendário fornecido.',
+          },
+          scheduled_time: {
+            type: 'string',
+            description: 'Hora da visita no formato HH:mm literal pedido pelo usuário (ex: 15:30).',
           },
           notes: { type: 'string', description: 'Observacoes ou interesses do visitante (opcional)' },
         },
-        required: ['lead_name', 'scheduled_at'],
+        required: ['lead_name', 'scheduled_date', 'scheduled_time'],
       },
     },
   },
@@ -483,12 +487,16 @@ const AGENT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         type: 'object',
         properties: {
           visit_id: { type: 'string', description: 'ID da visita a reagendar (obtido via list_visits)' },
-          new_scheduled_at: {
+          new_date: {
             type: 'string',
-            description: 'Nova data e hora no formato YYYY-MM-DDTHH:mm:00-03:00.',
+            description: 'Nova data no formato YYYY-MM-DD.',
+          },
+          new_time: {
+            type: 'string',
+            description: 'Nova hora no formato HH:mm.',
           },
         },
-        required: ['visit_id', 'new_scheduled_at'],
+        required: ['visit_id', 'new_date', 'new_time'],
       },
     },
   },
@@ -832,8 +840,8 @@ async function executeTool(
 
   // ── reschedule_visit ──────────────────────────────────────────────────────
   if (toolName === 'reschedule_visit') {
-    const { visit_id, new_scheduled_at } = args;
-    if (!visit_id || !new_scheduled_at) return '❌ Preciso do ID da visita e do novo horário para reagendar.';
+    const { visit_id, new_date, new_time } = args;
+    if (!visit_id || !new_date || !new_time) return '❌ Preciso do ID da visita, nova data e nova hora para reagendar.';
 
     // Busca a visita (suporta ID completo ou prefixo parcial)
     let visitToReschedule = null;
@@ -872,9 +880,9 @@ async function executeTool(
     if (visit.status === 'cancelled') return '❌ Não é possível reagendar uma visita já cancelada. Posso criar uma nova?';
     if (visit.status === 'done') return '❌ Não é possível reagendar uma visita que já foi realizada.';
 
-    // Normaliza para UTC ISO real
-    const realDateObj = new Date(new_scheduled_at);
-    const dateIsoUtc = !isNaN(realDateObj.getTime()) ? realDateObj.toISOString() : new_scheduled_at;
+    // Montagem segura com fuso horário travado
+    const realDateObj = new Date(`${new_date}T${new_time}:00-03:00`);
+    const dateIsoUtc = !isNaN(realDateObj.getTime()) ? realDateObj.toISOString() : new Date().toISOString();
 
     const { error } = await supabase
       .from('visit_appointments')
@@ -944,15 +952,20 @@ async function executeTool(
   }
 
     if (toolName === 'register_visit') {
-      const { lead_name, lead_phone, scheduled_at, notes } = args;
+      const { lead_name, lead_phone, scheduled_date, scheduled_time, notes } = args;
 
-      // O AI manda algo como "2026-04-16T14:00:00-03:00". Para manter '14:00' exato no banco (sem saltar 3h por causa de UTC), pegamos apenas a data/hora local.
-      const localTimeString = scheduled_at.substring(0, 19); // YYYY-MM-DDTHH:mm:ss
+      // Cria objeto de data real forçando offset de Brasília explicitamente
+      const targetDateObj = new Date(`${scheduled_date}T${scheduled_time}:00-03:00`);
+      if (isNaN(targetDateObj.getTime())) {
+        return '❌ Data ou horário informado é inválido.';
+      }
+      
+      const dbIso = targetDateObj.toISOString(); // Valor UTC real para o banco
+      const schedTime = targetDateObj.getTime();
 
-      // Verifica idempotência
-      const schedTime = new Date(localTimeString + 'Z').getTime();
-      const windowStart = new Date(schedTime - 30 * 1000).toISOString().substring(0, 19) + 'Z';
-      const windowEnd = new Date(schedTime + 30 * 1000).toISOString().substring(0, 19) + 'Z';
+      // Verifica idempotência (janela de 30s baseada no timestamp UTC real)
+      const windowStart = new Date(schedTime - 30 * 1000).toISOString();
+      const windowEnd = new Date(schedTime + 30 * 1000).toISOString();
 
       const { data: existing } = await supabase
         .from('visit_appointments')
@@ -964,7 +977,7 @@ async function executeTool(
         .limit(1);
 
       if (existing && existing.length > 0) {
-        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${localTimeString}`);
+        console.log(`[Webhook] Idempotência: Agendamento já existe para ${lead_name} em ${dbIso}`);
         const dateObj = new Date(existing[0].scheduled_at);
         const dateFormatted = dateObj.toLocaleString('pt-BR', {
           timeZone: 'America/Sao_Paulo',
@@ -978,7 +991,7 @@ async function executeTool(
         lead_id: leadId || null,
         lead_name,
         lead_phone: lead_phone || phone,
-        scheduled_at: localTimeString + 'Z', // Força banco a travar no horário cravado
+        scheduled_at: dbIso, // Agora salvamos o ISO UTC REAL definitivo no banco TIMESTAMPTZ
         notes: notes || null,
         status: 'scheduled',
       });
@@ -1501,25 +1514,7 @@ export async function POST(request: NextRequest) {
           toolArgs.lead_phone = phoneNumber;
         }
 
-        // Tenta normalizar a data para ISO caso venha em formato amigável
-        const targetDateKey = toolArgs.scheduled_at ? 'scheduled_at' : toolArgs.new_scheduled_at ? 'new_scheduled_at' : null;
-
-        if (targetDateKey) {
-          try {
-            let dateRaw = toolArgs[targetDateKey];
-            // Se o formato não contiver offset (+ ou - ou Z no final), força o offset de Brasília (-03:00)
-            if (dateRaw.includes('T') && !dateRaw.endsWith('Z') && !dateRaw.match(/[-+]\d{2}:?\d{2}$/)) {
-              dateRaw = dateRaw.substring(0, 19) + '-03:00';
-            }
-            
-            const dateObj = new Date(dateRaw);
-            if (!isNaN(dateObj.getTime())) {
-              toolArgs[targetDateKey] = dateObj.toISOString();
-            }
-          } catch (e) {
-             console.warn('[Webhook] Data inválida recebida da IA:', toolArgs[targetDateKey]);
-          }
-        }
+        // Não precisamos mais do normalizador de data complexo, pois mudamos a arquitetura para primitivos Date/Time separados imunes a Timezone Drift.
 
         // Executa a ação no banco
         const toolResult = await executeTool(
