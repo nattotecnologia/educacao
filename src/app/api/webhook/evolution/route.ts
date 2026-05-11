@@ -978,14 +978,12 @@ async function executeTool(
         return '❌ Não consegui registrar sua visita. Por favor, tente novamente ou ligue para nós.';
       }
 
-    // Formata a data de forma amigável com fuso correto
-    const dateObjFormat = new Date();
-    const [year, month, day, hour, min] = localTimeString.split(/[-T:]/);
-    dateObjFormat.setFullYear(Number(year), Number(month) - 1, Number(day));
-    dateObjFormat.setHours(Number(hour), Number(min), 0);
-    
-    // Fallback amigável simples
-    const dateFormatted = `${day}/${month}/${year}, ${hour}:${min}`;
+    // Formata a data de forma amigável com fuso correto do Brasil
+    const realDateObj = new Date(schedTime); // O schedTime já tem o timestamp correto
+    const dateFormatted = realDateObj.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
 
     return `✅ Visita agendada com sucesso! ${lead_name}, te esperamos no dia ${dateFormatted}. Você receberá uma confirmação. Caso precise reagendar, é só nos chamar! 😊`;
   }
@@ -1496,7 +1494,13 @@ export async function POST(request: NextRequest) {
         // Tenta normalizar a data para ISO caso venha em formato amigável
         if (toolArgs.scheduled_at) {
           try {
-            const dateObj = new Date(toolArgs.scheduled_at);
+            let dateRaw = toolArgs.scheduled_at;
+            // Se o formato não contiver offset (+ ou - ou Z no final), força o offset de Brasília (-03:00)
+            if (dateRaw.includes('T') && !dateRaw.endsWith('Z') && !dateRaw.match(/[-+]\d{2}:?\d{2}$/)) {
+              dateRaw = dateRaw.substring(0, 19) + '-03:00';
+            }
+            
+            const dateObj = new Date(dateRaw);
             if (!isNaN(dateObj.getTime())) {
               toolArgs.scheduled_at = dateObj.toISOString();
             }
@@ -1550,8 +1554,15 @@ export async function POST(request: NextRequest) {
         // Limpa possíveis tags raw do fallback
         botMessage = botMessage.replace(/<tool_call>[\s\S]*/g, '').trim() || toolResult;
 
-        // FORÇAR EXIBIÇÃO DE LISTAS: Se o agente "escondeu" a lista retornada pela ferramenta, nós injetamos.
-        if ((toolName === 'list_classes' || toolName === 'list_enrollments') && botMessage.length < toolResult.length * 0.5) {
+        // FORÇAR EXIBIÇÃO DE RESULTADOS CRÍTICOS: Se o agente cortou a mensagem ou foi sucinto demais em ações cruciais.
+        const isListAction = ['list_classes', 'list_enrollments', 'list_visits'].includes(toolName);
+        const isWritingAction = ['register_visit', 'register_enrollment', 'cancel_visit', 'reschedule_visit'].includes(toolName);
+        
+        if (isListAction && botMessage.length < toolResult.length * 0.5) {
+           botMessage = botMessage + '\n\n' + toolResult;
+        } 
+        else if (isWritingAction && botMessage.length < 30 && !botMessage.includes('sucesso')) {
+           // Se a IA retornar algo minúsculo tipo "Foi" em um registro, garantimos que a confirmação amigável da ferramenta vá junto!
            botMessage = botMessage + '\n\n' + toolResult;
         }
       } else {
