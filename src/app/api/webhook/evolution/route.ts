@@ -1185,15 +1185,44 @@ export async function POST(request: NextRequest) {
     console.log(`[Webhook] Lead: ${lead.name} (ID: ${lead.id})`);
 
     // 6. Salva a mensagem recebida IMEDIATAMENTE (para evitar perda em caso de timeout da IA)
-    await supabaseAdmin.from('messages').insert({
+    const { data: insertedMsg, error: insertError } = await supabaseAdmin.from('messages').insert({
       lead_id: lead.id,
       institution_id: institution.id,
       direction: 'inbound',
       content: incomingText,
-    });
-    console.log(`[Webhook] Mensagem 'inbound' salva com sucesso.`);
+    }).select('id').single();
 
-    // 6. Verifica atendimento humano
+    if (insertError) {
+      console.error('[Webhook] Erro ao salvar mensagem inbound:', insertError.message);
+    } else {
+      console.log(`[Webhook] Mensagem 'inbound' salva com sucesso (ID: ${insertedMsg?.id}).`);
+    }
+
+    // --- LÓGICA DE DEBOUNCE (AGRUPAMENTO DE MENSAGENS) ---
+    // Aguarda 3 segundos para dar tempo do usuário enviar mensagens de correção (ex: erros de digitação)
+    const DELAY_MS = 3000;
+    console.log(`[Webhook] Aguardando ${DELAY_MS}ms para agrupamento de mensagens (debounce)...`);
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+
+    if (insertedMsg?.id) {
+      // Verifica no banco se chegou uma mensagem mais recente do que a nossa neste intervalo
+      const { data: latestMsg } = await supabaseAdmin
+        .from('messages')
+        .select('id')
+        .eq('lead_id', lead.id)
+        .eq('direction', 'inbound')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (latestMsg && latestMsg.id !== insertedMsg.id) {
+        console.log(`[Webhook] Mensagem MAIS RECENTE detectada. Abortando execução da msg ID ${insertedMsg.id} para evitar respostas duplicadas.`);
+        return NextResponse.json({ success: true, reason: 'debounced_for_newer_message' });
+      }
+    }
+    // -----------------------------------------------------
+
+    // 7. Verifica atendimento humano
     if (lead.status === 'human_handling') {
       console.log(`[Webhook] Atendimento humano ativo para ${lead.name}. IA ignorando.`);
       return NextResponse.json({ success: true, ai_handled: false, reason: 'human_handling' });
