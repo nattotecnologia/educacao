@@ -85,7 +85,7 @@ export default function ClassesPage() {
   );
 
   const s = {
-    page: { display: 'flex', flexDirection: 'column' as const, gap: '2rem', maxWidth: '1200px', margin: '0 auto' },
+    page: { display: 'flex', flexDirection: 'column' as const, gap: '2rem' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '1rem' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' },
     card: {

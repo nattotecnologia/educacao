@@ -179,7 +179,7 @@ export default function PromotionsPage() {
     : promotions;
 
   const s = {
-    page: { display: 'flex', flexDirection: 'column' as const, gap: '2rem', maxWidth: '1200px', margin: '0 auto' },
+    page: { display: 'flex', flexDirection: 'column' as const, gap: '2rem' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '1rem' },
     searchContainer: {
       display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--glass-bg)',

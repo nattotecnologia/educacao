@@ -2,8 +2,6 @@
   display: flex;
   height: calc(100vh - 120px);
   gap: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 @media (max-width: 768px) {
