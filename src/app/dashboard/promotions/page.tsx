@@ -22,6 +22,8 @@ export default function PromotionsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [promotionToDelete, setPromotionToDelete] = useState<Promotion | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   
@@ -47,7 +49,7 @@ export default function PromotionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setPromotions(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
     } finally {
       setLoading(false);
@@ -129,15 +131,17 @@ export default function PromotionsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente excluir esta promoção?')) return;
+  const handleDelete = async () => {
+    if (!promotionToDelete) return;
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch(`/api/promotions/${id}`, {
+      await fetch(`/api/promotions/${promotionToDelete.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
+      setIsDeleteModalOpen(false);
+      setPromotionToDelete(null);
       fetchPromotions();
     } catch (error) {
       console.error(error);
@@ -340,7 +344,10 @@ export default function PromotionsPage() {
                           <Edit2 size={14} />
                         </button>
                         <button 
-                          onClick={() => handleDelete(p.id)} 
+                          onClick={() => {
+                            setPromotionToDelete(p);
+                            setIsDeleteModalOpen(true);
+                          }} 
                           style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.1)', color: '#ef4444', cursor: 'pointer', padding: '0.5rem', borderRadius: '8px', transition: 'all 0.15s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.05)'; }}
@@ -506,6 +513,58 @@ export default function PromotionsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isDeleteModalOpen && promotionToDelete && (
+        <div 
+          style={s.modalOverlay}
+          onClick={() => {
+            setIsDeleteModalOpen(false);
+            setPromotionToDelete(null);
+          }}
+        >
+          <div 
+            style={{ ...s.modalContent, maxWidth: '420px', gap: '1.25rem' }} 
+            className="animate-in"
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1rem', padding: '0.5rem 0' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                <Trash2 size={28} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Excluir Promoção</h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: '1.4' }}>
+                  Você tem certeza que deseja excluir a promoção <strong style={{ color: 'var(--text-primary)' }}>{promotionToDelete.name}</strong>?<br /> Esta ação não poderá ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setPromotionToDelete(null);
+                }} 
+                style={{ flex: 1, padding: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '10px', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', transition: 'all 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                onClick={handleDelete} 
+                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem', transition: 'all 0.15s', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}
+                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
@@ -24,23 +24,4 @@ export async function rateLimit(request: NextRequest): Promise<{ success: boolea
 
   record.count++;
   return { success: true, remaining: RATE_LIMIT - record.count };
-}
-
-export function withRateLimit(handler: (req: NextRequest) => Promise<NextResponse>) {
-  return async (request: NextRequest) => {
-    const { success, remaining } = await rateLimit(request);
-    
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Too Many Requests', message: 'Limite de requisições excedido. Tente novamente em alguns segundos.' },
-        { status: 429, headers: { 'Retry-After': String(RATE_LIMIT_WINDOW) } }
-      );
-    }
-
-    const response = await handler(request);
-    response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT));
-    response.headers.set('X-RateLimit-Remaining', String(remaining));
-    
-    return response;
-  };
 }

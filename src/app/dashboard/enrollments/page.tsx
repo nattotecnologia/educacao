@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { GraduationCap, Plus, Loader2, Search, Filter, ChevronLeft, ChevronRight, Edit2, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { GraduationCap, Plus, Loader2, Search, ChevronLeft, ChevronRight, Edit2, XCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { maskPhone } from '@/utils/masks';
 
@@ -27,7 +27,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 
 export default function EnrollmentsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -35,10 +34,26 @@ export default function EnrollmentsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [courseFilter, setCourseFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
-  const [courses, setCourses] = useState<any[]>([]);
-  const [classes, setClasses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
+  const [classes, setClasses] = useState<{ id: string; name: string; course_id: string }[]>([]);
   const [page, setPage] = useState(1);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [enrollmentToCancel, setEnrollmentToCancel] = useState<Enrollment | null>(null);
   const pageSize = 20;
+
+  const s = {
+    modalOverlay: {
+      position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.65)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+      backdropFilter: 'blur(8px)', animation: 'fadeIn 0.2s ease-out'
+    },
+    modalContent: {
+      background: 'var(--bg-primary)', padding: '2.5rem 2rem 2rem 2rem', borderRadius: '16px',
+      width: '100%', maxWidth: '420px', border: '1px solid var(--glass-border)',
+      boxShadow: '0 20px 50px rgba(0,0,0,0.3)', position: 'relative' as const,
+      display: 'flex', flexDirection: 'column' as const, gap: '1.25rem'
+    }
+  };
 
   const fetchFiltersData = useCallback(async () => {
     try {
@@ -87,7 +102,7 @@ export default function EnrollmentsPage() {
       if (!res.ok) throw new Error(data.error);
       setEnrollments(data.data || []);
       setTotal(data.total || 0);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
     } finally {
       setLoading(false);
@@ -95,6 +110,27 @@ export default function EnrollmentsPage() {
   }, [page, statusFilter, courseFilter, classFilter]);
 
   useEffect(() => { fetchEnrollments(); }, [fetchEnrollments]);
+
+  const handleCancel = async () => {
+    if (!enrollmentToCancel) return;
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(`/api/enrollments/${enrollmentToCancel.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+      setIsCancelModalOpen(false);
+      setEnrollmentToCancel(null);
+      fetchEnrollments();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const filtered = search
     ? enrollments.filter(e =>
@@ -156,7 +192,7 @@ export default function EnrollmentsPage() {
           style={{ padding: '0.65rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none', minWidth: '150px' }}
         >
           <option value="">Todas as turmas</option>
-          {(courseFilter ? classes.filter((c: any) => c.course_id === courseFilter) : classes).map((cl: any) => (
+          {(courseFilter ? classes.filter(c => c.course_id === courseFilter) : classes).map(cl => (
             <option key={cl.id} value={cl.id}>{cl.name}</option>
           ))}
         </select>
@@ -208,7 +244,7 @@ export default function EnrollmentsPage() {
                     </td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{en.classes?.name || '—'}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(en.classes as any)?.courses?.name || ''}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{en.classes?.courses?.name || ''}</div>
                     </td>
                     <td style={{ padding: '0.875rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{en.student_phone ? maskPhone(en.student_phone) : '—'}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
@@ -230,20 +266,9 @@ export default function EnrollmentsPage() {
                         </button>
                         {en.status !== 'cancelled' && (
                           <button
-                            onClick={async () => {
-                              if (confirm('Tem certeza que deseja cancelar esta matrícula?')) {
-                                const supabase = createClient();
-                                const { data: { session } } = await supabase.auth.getSession();
-                                await fetch(`/api/enrollments/${en.id}`, {
-                                  method: 'PATCH',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    Authorization: `Bearer ${session?.access_token}`
-                                  },
-                                  body: JSON.stringify({ status: 'cancelled' })
-                                });
-                                fetchEnrollments();
-                              }
+                            onClick={() => {
+                              setEnrollmentToCancel(en);
+                              setIsCancelModalOpen(true);
                             }}
                             title="Cancelar Matrícula"
                             style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.25rem' }}
@@ -271,6 +296,58 @@ export default function EnrollmentsPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {isCancelModalOpen && enrollmentToCancel && (
+        <div 
+          style={s.modalOverlay}
+          onClick={() => {
+            setIsCancelModalOpen(false);
+            setEnrollmentToCancel(null);
+          }}
+        >
+          <div 
+            style={s.modalContent} 
+            className="animate-in"
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1rem', padding: '0.5rem 0' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                <XCircle size={28} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Cancelar Matrícula</h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: '1.4' }}>
+                  Você tem certeza que deseja cancelar a matrícula de <strong style={{ color: 'var(--text-primary)' }}>{enrollmentToCancel.student_name}</strong>?<br />O status passará para <strong style={{ color: '#ef4444' }}>Cancelada</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setIsCancelModalOpen(false);
+                  setEnrollmentToCancel(null);
+                }} 
+                style={{ flex: 1, padding: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '10px', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', transition: 'all 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+              >
+                Manter Matrícula
+              </button>
+              <button 
+                type="button" 
+                onClick={handleCancel} 
+                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem', transition: 'all 0.15s', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}
+                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+              >
+                Confirmar Cancelamento
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

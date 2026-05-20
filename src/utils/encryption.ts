@@ -2,7 +2,6 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
 const SALT_LENGTH = 64;
 const KEY_LENGTH = 32;
 const ITERATIONS = 10000;
@@ -56,12 +55,6 @@ export function decrypt(encryptedData: string): string {
     return decrypted;
   } catch (error) {
     console.error('Erro ao descriptografar:', error);
-    return null as any;
+    return '';
   }
-}
-
-export function isEncrypted(text: string): boolean {
-  if (!text || !text.includes(':')) return false;
-  const parts = text.split(':');
-  return parts.length === 4 && parts.every(p => /^[a-f0-9]+$/.test(p));
 }
