@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { User, Upload, Save, Loader2, Mail } from 'lucide-react';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 import { createClient } from '@/utils/supabase/client';
 import styles from './Profile.module.css';
 
 export default function ProfilePage() {
   const supabase = createClient();
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

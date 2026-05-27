@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { Plus, Megaphone, Calendar, CheckCircle2, Loader2, PlayCircle, Clock, Save, BellRing, Edit, Trash2, Eye, X } from 'lucide-react';
 import styles from './Campaigns.module.css';
 import { getCampaigns, getRemindersSettings, updateRemindersSettings, deleteCampaign, getCampaignLogs } from './actions';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 import { maskPhone } from '@/utils/masks';
 
 export default function CampaignsPage() {
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
   
   const [activeTab, setActiveTab] = useState<'promocoes' | 'lembretes'>('promocoes');
   

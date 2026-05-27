@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -10,7 +11,7 @@ import {
 } from 'lucide-react';
 import { leadService, visitService } from '@/services';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 import { maskPhone } from '@/utils/masks';
 import styles from './Leads.module.css';
 
@@ -45,31 +46,38 @@ const statusMap: Record<string, { label: string; color: string; bg: string }> = 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [sortField, setSortField] = useState('created_at');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const queryClient = useQueryClient();
+  const { addNotification } = useNotificationDispatch();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [leadVisits, setLeadVisits] = useState<any[]>([]);
-  const [loadingVisits, setLoadingVisits] = useState(false);
-
-  const { addNotification } = useNotification();
-  const [confirmConfig, setConfirmConfig] = useState({
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [editLead, setEditLead] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: '', phone: '' });
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'warning' | 'danger' | 'info';
+    action: () => Promise<void>;
+  }>({
     isOpen: false,
     title: '',
     message: '',
-    type: 'danger' as 'danger' | 'warning' | 'info',
-    action: async () => {},
+    type: 'warning',
+    action: async () => {}
   });
-  const [editLead, setEditLead] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', phone: '' });
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  // Estados Unificados de Filtros e Paginação
+  const [filters, setFilters] = useState({
+    search: '',
+    status: '',
+    page: 1,
+    pageSize: 20,
+    sortField: 'created_at',
+    sortOrder: 'desc' as 'asc' | 'desc'
+  });
+
+  // Estado derivado para o lead selecionado (detalhes no modal)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const querySearch = searchParams.get('search');
@@ -77,55 +85,63 @@ export default function LeadsPage() {
   // Sincroniza busca vinda da URL (Navbar)
   useEffect(() => {
     if (querySearch !== null) {
-      setSearchTerm(querySearch);
-      setPage(1);
+      setFilters(prev => ({ ...prev, search: querySearch, page: 1 }));
     }
   }, [querySearch]);
 
-  const debouncedSearch = useDebounce(searchTerm, 400);
+  const debouncedSearch = useDebounce(filters.search, 400);
 
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await leadService.getFiltered({
-        search: debouncedSearch,
-        status: filterStatus,
-        page,
-        pageSize,
-        orderBy: sortField,
-        orderDirection: sortOrder,
-      });
-      setLeads(result.data);
-      setTotal(result.total);
-    } catch (err) {
-      console.error('Erro ao buscar leads:', err);
-    } finally {
-      setLoading(false);
+  // Query reativa para lista de leads com TanStack Query
+  const { data: leadsResponse, isLoading: loading } = useQuery({
+    queryKey: ['leads', debouncedSearch, filters.status, filters.page, filters.pageSize, filters.sortField, filters.sortOrder],
+    queryFn: () => leadService.getFiltered({
+      search: debouncedSearch,
+      status: filters.status,
+      page: filters.page,
+      pageSize: filters.pageSize,
+      orderBy: filters.sortField,
+      orderDirection: filters.sortOrder,
+    })
+  });
+  
+  const leads = leadsResponse?.data || [];
+  const total = leadsResponse?.total || 0;
+
+  const selectedLead = leads.find(l => l.id === selectedLeadId) || null;
+
+  // Query reativa para visitas do lead selecionado
+  const { data: leadVisits = [], isLoading: loadingVisits } = useQuery({
+    queryKey: ['visits', selectedLeadId],
+    queryFn: () => visitService.getByLeadId(selectedLeadId!),
+    enabled: !!selectedLeadId
+  });
+
+  // Mutações estruturadas para modificação e persistência de dados com TanStack Query
+  const statusMutation = useMutation({
+    mutationFn: ({ leadId, status }: { leadId: string; status: string }) => leadService.updateStatus(leadId, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
     }
-  }, [debouncedSearch, filterStatus, page, pageSize, sortField, sortOrder]);
+  });
 
-  useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
-
-  useEffect(() => {
-    if (selectedLead?.id) {
-      setLoadingVisits(true);
-      visitService.getByLeadId(selectedLead.id)
-        .then(setLeadVisits)
-        .catch(err => console.error('Erro ao buscar visitas:', err))
-        .finally(() => setLoadingVisits(false));
-    } else {
-      setLeadVisits([]);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) => leadService.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
     }
-  }, [selectedLead?.id]);
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => leadService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+    }
+  });
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     setUpdatingId(leadId);
     try {
-      const updated = await leadService.updateStatus(leadId, newStatus);
-      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
-      if (selectedLead?.id === leadId) setSelectedLead(updated);
+      await statusMutation.mutateAsync({ leadId, status: newStatus });
     } catch (err) {
       console.error('Erro ao atualizar status:', err);
     } finally {
@@ -143,13 +159,12 @@ export default function LeadsPage() {
       action: async () => {
         setIsDeleting(lead.id);
         try {
-          await leadService.delete(lead.id);
+          await deleteMutation.mutateAsync(lead.id);
           addNotification({
             title: 'Lead Excluído',
             message: 'O lead foi removido com sucesso.',
             type: 'success',
           });
-          fetchLeads();
         } catch (err) {
           addNotification({
             title: 'Erro',
@@ -178,14 +193,13 @@ export default function LeadsPage() {
       type: 'warning',
       action: async () => {
         try {
-          await leadService.update(editLead.id, { name: editForm.name, phone: editForm.phone });
+          await updateMutation.mutateAsync({ id: editLead.id, payload: { name: editForm.name, phone: editForm.phone } });
           addNotification({
             title: 'Lead Atualizado',
             message: 'Os dados do lead foram atualizados com sucesso.',
             type: 'success',
           });
           setEditLead(null);
-          fetchLeads();
         } catch (err) {
           addNotification({
             title: 'Erro',
@@ -200,23 +214,26 @@ export default function LeadsPage() {
   };
 
   const handleSort = (field: string) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
-    setPage(1);
+    setFilters(prev => {
+      const isSameField = prev.sortField === field;
+      const nextOrder = isSameField && prev.sortOrder === 'asc' ? 'desc' : 'asc';
+      return {
+        ...prev,
+        sortField: field,
+        sortOrder: isSameField ? nextOrder : 'desc',
+        page: 1
+      };
+    });
   };
 
   const getSortIcon = (field: string) => {
-    if (sortField !== field) return <ArrowUpDown size={14} className={styles.sortIcon} />;
-    return sortOrder === 'asc' ? 
+    if (filters.sortField !== field) return <ArrowUpDown size={14} className={styles.sortIcon} />;
+    return filters.sortOrder === 'asc' ? 
       <ArrowUp size={14} className={styles.sortIconActive} /> : 
       <ArrowDown size={14} className={styles.sortIconActive} />;
   };
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.ceil(total / filters.pageSize);
 
   return (
     <div className={styles.container}>
@@ -238,8 +255,8 @@ export default function LeadsPage() {
             type="text"
             placeholder="Buscar por nome ou telefone..."
             className={styles.searchInput}
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+            value={filters.search}
+            onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value, page: 1 })); }}
           />
         </div>
         <div className={styles.filterActions}>
@@ -247,8 +264,8 @@ export default function LeadsPage() {
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Mostrar:</span>
             <select
               className={styles.filterSelect}
-              value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              value={filters.pageSize}
+              onChange={(e) => { setFilters(prev => ({ ...prev, pageSize: Number(e.target.value), page: 1 })); }}
             >
               {PAGE_SIZE_OPTIONS.map(opt => (
                 <option key={opt} value={opt}>{opt}</option>
@@ -259,8 +276,8 @@ export default function LeadsPage() {
             <Filter size={16} style={{ color: 'var(--text-muted)' }} />
             <select
               className={styles.filterSelect}
-              value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+              value={filters.status}
+              onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value, page: 1 })); }}
             >
               {STATUS_LIST.map(s => (
                 <option key={s.value} value={s.value}>{s.label}</option>
@@ -309,7 +326,7 @@ export default function LeadsPage() {
             </thead>
             <tbody>
               {leads.map((lead) => (
-                <tr key={lead.id} onClick={() => setSelectedLead(lead)} style={{ cursor: 'pointer' }}>
+                <tr key={lead.id} onClick={() => setSelectedLeadId(lead.id)} style={{ cursor: 'pointer' }}>
                   <td>
                     <div className={styles.leadInfo}>
                       <span className={styles.leadName}>{lead.name || 'Sem Nome'}</span>
@@ -381,11 +398,11 @@ export default function LeadsPage() {
         {/* Paginação */}
         {totalPages > 1 && (
           <div className={styles.pagination}>
-            <span className={styles.pageInfo}>{total} leads · Pág. {page} de {totalPages}</span>
-            <button className={styles.pageBtn} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+            <span className={styles.pageInfo}>{total} leads · Pág. {filters.page} de {totalPages}</span>
+            <button className={styles.pageBtn} onClick={() => setFilters(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))} disabled={filters.page === 1}>
               <ChevronLeft size={16} />
             </button>
-            <button className={styles.pageBtn} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+            <button className={styles.pageBtn} onClick={() => setFilters(prev => ({ ...prev, page: Math.min(totalPages, prev.page + 1) }))} disabled={filters.page === totalPages}>
               <ChevronRight size={16} />
             </button>
           </div>
@@ -394,11 +411,11 @@ export default function LeadsPage() {
 
       {/* Modal de Detalhes */}
       {selectedLead && (
-        <div className={styles.modalOverlay} onClick={() => setSelectedLead(null)}>
+        <div className={styles.modalOverlay} onClick={() => setSelectedLeadId(null)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3>{selectedLead.name || 'Sem nome'}</h3>
-              <button className={styles.closeBtn} onClick={() => setSelectedLead(null)}>
+              <button className={styles.closeBtn} onClick={() => setSelectedLeadId(null)}>
                 <X size={20} />
               </button>
             </div>

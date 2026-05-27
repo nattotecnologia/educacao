@@ -8,7 +8,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { getInstitutionSettings, updateInstitutionSettings } from '../settings/actions';
 import styles from './WhatsApp.module.css';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 
 export default function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ export default function WhatsAppPage() {
   const [connectionStatus, setConnectionStatus] = useState<'open' | 'close' | 'connecting' | 'none'>('none');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [manualConfig, setManualConfig] = useState<{ manualMode: boolean; instanceName: string | null } | null>(null);
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
 
   const [settings, setSettings] = useState({
     evolution_instance_name: '',

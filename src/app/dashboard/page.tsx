@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 
 const WeeklyChart = dynamic(() => import('./components/WeeklyChart'), { 
@@ -12,6 +13,7 @@ const EnrollmentEvolutionChart = dynamic(() => import('./components/EnrollmentEv
   loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}><Loader2 className="animate-spin" /></div>
 });
 import { Users, Bot, CheckCircle, TrendingUp, TrendingDown, Activity, Clock, Phone, Loader2, DollarSign } from 'lucide-react';
+import Link from 'next/link';
 import { authService } from '@/services';
 import { maskPhone } from '@/utils/masks';
 import styles from './Dashboard.module.css';
@@ -39,157 +41,148 @@ interface Stats {
   totalBilled?: number;
 }
 
-export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [userName, setUserName] = useState('');
+const fetchDashboardStats = async (institutionId: string) => {
+  const supabase = (await import('@/utils/supabase/client')).createClient();
+  
+  const res = await fetch(`/api/dashboard/stats?institution_id=${institutionId}`);
+  if (!res.ok) throw new Error('Falha ao buscar estatísticas básicas.');
+  
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
 
-  const fetchStats = useCallback(async () => {
-    try {
+  // Buscar dados de cursos e matrículas para o ranking de cursos em alta
+  const { data: coursesData } = await supabase
+    .from('courses')
+    .select('id, name')
+    .eq('institution_id', institutionId)
+    .eq('is_active', true);
+
+  const { data: enrollmentsData } = await supabase
+    .from('enrollments')
+    .select('enrolled_at, status, classes(courses(id, name, price))')
+    .eq('institution_id', institutionId);
+
+  const courseCounts: Record<string, number> = {};
+  coursesData?.forEach((c) => {
+    courseCounts[c.name] = 0;
+  });
+
+  enrollmentsData?.forEach((e: any) => {
+    const courseName = e.classes?.courses?.name;
+    if (courseName && courseCounts[courseName] !== undefined) {
+      courseCounts[courseName] += 1;
+    }
+  });
+
+  const ranked = Object.entries(courseCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Calcular evolução histórica de matrículas (últimos 6 meses)
+  const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const evolutionMap: Record<string, number> = {};
+
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${monthsMap[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
+    evolutionMap[key] = 0;
+  }
+
+  enrollmentsData?.forEach((e: any) => {
+    if (e.enrolled_at) {
+      const date = new Date(e.enrolled_at);
+      const key = `${monthsMap[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
+      if (evolutionMap[key] !== undefined) {
+        evolutionMap[key] += 1;
+      }
+    }
+  });
+
+  const evolution = Object.entries(evolutionMap).map(([name, count]) => ({
+    name,
+    count
+  }));
+
+  // Buscar promoções ativas
+  const { data: promotionsData } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('institution_id', institutionId)
+    .eq('is_active', true);
+
+  const now = new Date();
+  const activePromotions = (promotionsData || []).filter((p: any) => {
+    if (!p.valid_until) return true;
+    return new Date(p.valid_until) >= now;
+  });
+
+  const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
+
+  let totalBilled = 0;
+  enrollmentsData?.forEach((e: any) => {
+    if (e.status === 'active') {
+      let price = e.classes?.courses?.price || 0;
+      const courseId = e.classes?.courses?.id;
+      const enrolledAt = new Date(e.enrolled_at);
+
+      if (price > 0 && courseId) {
+        const specificPromo = activePromotions.find((p: any) => p.course_id === courseId && new Date(p.created_at) <= enrolledAt);
+        const validGlobalPromos = globalPromotions.filter((p: any) => new Date(p.created_at) <= enrolledAt);
+        const appliedPromo = specificPromo || (validGlobalPromos.length > 0 ? validGlobalPromos[0] : null);
+
+        if (appliedPromo) {
+          let discountAmount = 0;
+          if (appliedPromo.discount_percentage) {
+            discountAmount = price * (appliedPromo.discount_percentage / 100);
+          } else if (appliedPromo.discount_value) {
+            discountAmount = appliedPromo.discount_value;
+          }
+          price = Math.max(0, price - discountAmount);
+        }
+      }
+
+      totalBilled += price;
+    }
+  });
+
+  return {
+    ...data,
+    rankedCourses: ranked,
+    enrollmentEvolution: evolution,
+    totalBilled
+  };
+};
+
+export default function Dashboard() {
+  const queryClient = useQueryClient();
+
+  // Query do Perfil (compartilhado e cacheado globalmente)
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
       const supabase = (await import('@/utils/supabase/client')).createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase.from('profiles').select('institution_id, full_name').eq('id', user.id).single();
-      
-      if (profile?.full_name) {
-        setUserName(profile.full_name);
-      }
-      if (!profile?.institution_id) {
-        setError('Nenhuma instituição vinculada. Acesse as Configurações.');
-        setLoading(false);
-        return;
-      }
-
-      const res = await fetch(`/api/dashboard/stats?institution_id=${profile.institution_id}`);
-      
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-
-        // Buscar dados de cursos e matrículas para o ranking de cursos em alta
-        const { data: coursesData } = await supabase
-          .from('courses')
-          .select('id, name')
-          .eq('institution_id', profile.institution_id)
-          .eq('is_active', true);
-
-        const { data: enrollmentsData } = await supabase
-          .from('enrollments')
-          .select('enrolled_at, status, classes(courses(id, name, price))')
-          .eq('institution_id', profile.institution_id);
-
-        const courseCounts: Record<string, number> = {};
-        coursesData?.forEach((c) => {
-          courseCounts[c.name] = 0;
-        });
-
-        enrollmentsData?.forEach((e: any) => {
-          const courseName = e.classes?.courses?.name;
-          if (courseName && courseCounts[courseName] !== undefined) {
-            courseCounts[courseName] += 1;
-          }
-        });
-
-        const ranked = Object.entries(courseCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-
-        // Calcular evolução histórica de matrículas (últimos 6 meses)
-        const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-        const evolutionMap: Record<string, number> = {};
-
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date();
-          d.setMonth(d.getMonth() - i);
-          const key = `${monthsMap[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
-          evolutionMap[key] = 0;
-        }
-
-        enrollmentsData?.forEach((e: any) => {
-          if (e.enrolled_at) {
-            const date = new Date(e.enrolled_at);
-            const key = `${monthsMap[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
-            if (evolutionMap[key] !== undefined) {
-              evolutionMap[key] += 1;
-            }
-          }
-        });
-
-        const evolution = Object.entries(evolutionMap).map(([name, count]) => ({
-          name,
-          count
-        }));
-
-        // Buscar promoções ativas
-        const { data: promotionsData } = await supabase
-          .from('promotions')
-          .select('*')
-          .eq('institution_id', profile.institution_id)
-          .eq('is_active', true);
-
-        const now = new Date();
-        const activePromotions = (promotionsData || []).filter((p: any) => {
-          if (!p.valid_until) return true;
-          return new Date(p.valid_until) >= now;
-        });
-
-        const globalPromotions = activePromotions.filter((p: any) => !p.course_id);
-        const globalPromo = globalPromotions.length > 0 ? globalPromotions[0] : null;
-
-        let totalBilled = 0;
-        enrollmentsData?.forEach((e: any) => {
-          if (e.status === 'active') {
-            let price = e.classes?.courses?.price || 0;
-            const courseId = e.classes?.courses?.id;
-            const enrolledAt = new Date(e.enrolled_at);
-
-            if (price > 0 && courseId) {
-              const specificPromo = activePromotions.find((p: any) => p.course_id === courseId && new Date(p.created_at) <= enrolledAt);
-              const validGlobalPromos = globalPromotions.filter((p: any) => new Date(p.created_at) <= enrolledAt);
-              const appliedPromo = specificPromo || (validGlobalPromos.length > 0 ? validGlobalPromos[0] : null);
-
-              if (appliedPromo) {
-                let discountAmount = 0;
-                if (appliedPromo.discount_percentage) {
-                  discountAmount = price * (appliedPromo.discount_percentage / 100);
-                } else if (appliedPromo.discount_value) {
-                  discountAmount = appliedPromo.discount_value;
-                }
-                price = Math.max(0, price - discountAmount);
-              }
-            }
-
-            totalBilled += price;
-          }
-        });
-
-        setStats({
-          ...data,
-          rankedCourses: ranked,
-          enrollmentEvolution: evolution,
-          totalBilled
-        });
-      } else {
-        const text = await res.text();
-        console.error(`Erro: o servidor não retornou JSON (Status ${res.status}):`, text.substring(0, 150));
-        throw new Error(`Erro ao carregar estatísticas. O endpoint /api/dashboard/stats retornou um HTML.`);
-      }
-    } catch (err: any) {
-      console.error('Erro ao buscar stats:', err);
-      setError(err.message || 'Erro ao carregar estatísticas.');
-    } finally {
-      setLoading(false);
+      if (!user) throw new Error('Não autenticado');
+      const { data, error } = await supabase.from('profiles').select('institution_id, full_name').eq('id', user.id).single();
+      if (error) throw error;
+      return data;
     }
-  }, []);
+  });
 
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+  const institutionId = profile?.institution_id;
+  const userName = profile?.full_name || '';
 
+  // Query de Estatísticas (reativa, baseada no ID da instituição)
+  const { data: stats, isLoading: isStatsLoading, error } = useQuery<Stats>({
+    queryKey: ['dashboardStats', institutionId],
+    queryFn: () => fetchDashboardStats(institutionId!),
+    enabled: !!institutionId,
+  });
+
+  // Listener Supabase Realtime para invalidar cache de queries
   useEffect(() => {
+    if (!institutionId) return;
     let channel: any;
 
     const setupRealtime = async () => {
@@ -202,24 +195,24 @@ export default function Dashboard() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'leads' },
           () => {
-            console.log('Dados de leads mudaram, atualizando dashboard...');
-            fetchStats();
+            console.log('Realtime: leads alterados. Atualizando stats...');
+            queryClient.invalidateQueries({ queryKey: ['dashboardStats', institutionId] });
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'enrollments' },
           () => {
-            console.log('Dados de matrículas mudaram, atualizando faturamento do dashboard...');
-            fetchStats();
+            console.log('Realtime: matrículas alteradas. Atualizando stats...');
+            queryClient.invalidateQueries({ queryKey: ['dashboardStats', institutionId] });
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'visit_appointments' },
           () => {
-            console.log('Dados de agendamentos mudaram, atualizando mapa de calor do dashboard...');
-            fetchStats();
+            console.log('Realtime: agendamentos alterados. Atualizando stats...');
+            queryClient.invalidateQueries({ queryKey: ['dashboardStats', institutionId] });
           }
         )
         .subscribe();
@@ -235,12 +228,38 @@ export default function Dashboard() {
         });
       }
     };
-  }, [fetchStats]);
+  }, [institutionId, queryClient]);
 
-  if (loading && !stats) {
+  if (isProfileLoading || (institutionId && isStatsLoading)) {
     return (
       <div className={styles.container} style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh', display: 'flex' }}>
         <Loader2 className="animate-spin" size={40} />
+      </div>
+    );
+  }
+
+  if (!isProfileLoading && !institutionId) {
+    return (
+      <div className={styles.container} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div className="card" style={{ maxWidth: '480px', width: '100%', textAlign: 'center', padding: '2rem', border: '1px solid var(--glass-border)' }}>
+          <h2 style={{ color: 'var(--accent-danger)', marginBottom: '1rem' }}>Vínculo de Instituição Pendente</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+            Seu perfil foi carregado com sucesso, mas ainda não está associado a nenhuma instituição educacional. 
+            Isso pode ocorrer se o cadastro inicial não tiver sido concluído ou se houver pendências de sincronização.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <Link href="/dashboard/settings" className="custom-button">
+              Ir para Configurações
+            </Link>
+            <button 
+              onClick={() => authService.logout().then(() => window.location.href = '/login')}
+              className="custom-button" 
+              style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+            >
+              Fazer Sair (Logout)
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -249,7 +268,7 @@ export default function Dashboard() {
     return (
       <div className={styles.container}>
         <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-          {error || 'Não foi possível carregar as estatísticas.'}
+          {error?.message || 'Não foi possível carregar as estatísticas.'}
         </div>
       </div>
     );

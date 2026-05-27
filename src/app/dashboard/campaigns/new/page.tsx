@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 import { ArrowLeft, Send, Save, Loader2, Users, Megaphone, ShieldAlert, Clock } from 'lucide-react';
 import Link from 'next/link';
 import styles from '../Campaigns.module.css';
@@ -12,7 +12,7 @@ export default function NewCampaignPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

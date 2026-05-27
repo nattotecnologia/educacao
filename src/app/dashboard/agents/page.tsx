@@ -11,13 +11,13 @@ import { getInstitutionSettings, updateInstitutionSettings, updateTokenQuota, fe
 import Autocomplete from '@/components/ui/Autocomplete';
 
 import styles from './Agents.module.css';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
   
   const [institution, setInstitution] = useState<any>(null);
   const [aiSettings, setAiSettings] = useState({

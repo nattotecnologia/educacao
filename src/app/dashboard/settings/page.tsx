@@ -7,7 +7,7 @@ import {
   Clock, Calendar, Trash2, Plus, Terminal, FileText
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotificationDispatch } from '@/contexts/NotificationContext';
 import styles from './Settings.module.css';
 import { createClient } from '@/utils/supabase/client';
 import { 
@@ -17,7 +17,7 @@ import {
 } from './actions';
 
 export default function SettingsPage() {
-  const { addNotification } = useNotification();
+  const { addNotification } = useNotificationDispatch();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const supabase = createClient();

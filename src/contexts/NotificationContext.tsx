@@ -21,7 +21,20 @@ interface NotificationContextProps {
   clearAll: () => void;
 }
 
-const NotificationContext = createContext<NotificationContextProps | undefined>(undefined);
+interface NotificationStateProps {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
+interface NotificationDispatchProps {
+  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
+  clearAll: () => void;
+}
+
+const NotificationStateContext = createContext<NotificationStateProps | undefined>(undefined);
+const NotificationDispatchContext = createContext<NotificationDispatchProps | undefined>(undefined);
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -177,123 +190,134 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        addNotification,
-        markAsRead,
-        markAllAsRead,
-        clearAll,
-      }}
-    >
-      {children}
+    <NotificationStateContext.Provider value={{ notifications, unreadCount }}>
+      <NotificationDispatchContext.Provider value={{ addNotification, markAsRead, markAllAsRead, clearAll }}>
+        {children}
 
-      {/* Container de Toasts flutuantes premium (Canto inferior direito) */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          zIndex: 999999,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          maxWidth: '380px',
-          width: '100%',
-          pointerEvents: 'none',
-        }}
-      >
-        {toasts.map((t) => {
-          let bgColor = 'rgba(23, 23, 37, 0.85)';
-          let borderColor = 'rgba(255, 255, 255, 0.08)';
-          let accentColor = '#3b82f6';
-          
-          if (t.type === 'success') {
-            accentColor = '#10b981';
-          } else if (t.type === 'warning') {
-            accentColor = '#f59e0b';
-          } else if (t.type === 'error') {
-            accentColor = '#ef4444';
-          }
+        {/* Container de Toasts flutuantes premium (Canto inferior direito) */}
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 999999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxWidth: '380px',
+            width: '100%',
+            pointerEvents: 'none',
+          }}
+        >
+          {toasts.map((t) => {
+            let bgColor = 'rgba(23, 23, 37, 0.85)';
+            let borderColor = 'rgba(255, 255, 255, 0.08)';
+            let accentColor = '#3b82f6';
+            
+            if (t.type === 'success') {
+              accentColor = '#10b981';
+            } else if (t.type === 'warning') {
+              accentColor = '#f59e0b';
+            } else if (t.type === 'error') {
+              accentColor = '#ef4444';
+            }
 
-          return (
-            <div
-              key={t.id}
-              style={{
-                background: bgColor,
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                borderLeft: `4px solid ${accentColor}`,
-                borderTop: `1px solid ${borderColor}`,
-                borderRight: `1px solid ${borderColor}`,
-                borderBottom: `1px solid ${borderColor}`,
-                borderRadius: '10px',
-                padding: '16px',
-                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.3)',
-                color: '#fff',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: '12px',
-                pointerEvents: 'auto',
-                animation: 'toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                transition: 'all 0.3s ease',
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
-                  {t.title}
-                </h4>
-                <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.4, wordBreak: 'break-word' }}>
-                  {t.message}
-                </p>
-              </div>
-              <button
-                onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
+            return (
+              <div
+                key={t.id}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'rgba(255, 255, 255, 0.4)',
-                  cursor: 'pointer',
-                  padding: '2px',
-                  fontSize: '1.25rem',
-                  lineHeight: 1,
-                  transition: 'color 0.2s',
+                  background: bgColor,
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  borderLeft: `4px solid ${accentColor}`,
+                  borderTop: `1px solid ${borderColor}`,
+                  borderRight: `1px solid ${borderColor}`,
+                  borderBottom: `1px solid ${borderColor}`,
+                  borderRadius: '10px',
+                  padding: '16px',
+                  boxShadow: '0 12px 30px rgba(0, 0, 0, 0.3)',
+                  color: '#fff',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  pointerEvents: 'auto',
+                  animation: 'toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                  transition: 'all 0.3s ease',
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.color = '#fff')}
-                onMouseOut={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.4)')}
               >
-                &times;
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
+                    {t.title}
+                  </h4>
+                  <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                    {t.message}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.4)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    fontSize: '1.25rem',
+                    lineHeight: 1,
+                    transition: 'color 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.color = '#fff')}
+                  onMouseOut={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.4)')}
+                >
+                  &times;
+                </button>
+              </div>
+            );
+          })}
+        </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes toastSlideIn {
-          from {
-            transform: translateY(40px) scale(0.95);
-            opacity: 0;
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes toastSlideIn {
+            from {
+              transform: translateY(40px) scale(0.95);
+              opacity: 0;
+            }
+            to {
+              transform: translateY(0) scale(1);
+              opacity: 1;
+            }
           }
-          to {
-            transform: translateY(0) scale(1);
-            opacity: 1;
-          }
-        }
-      `}} />
-    </NotificationContext.Provider>
+        `}} />
+      </NotificationDispatchContext.Provider>
+    </NotificationStateContext.Provider>
   );
 };
 
-export const useNotification = () => {
-  const context = useContext(NotificationContext);
+export const useNotificationState = () => {
+  const context = useContext(NotificationStateContext);
   if (context === undefined) {
-    throw new Error('useNotification must be used within a NotificationProvider');
+    throw new Error('useNotificationState must be used within a NotificationProvider');
   }
   return context;
 };
+
+export const useNotificationDispatch = () => {
+  const context = useContext(NotificationDispatchContext);
+  if (context === undefined) {
+    throw new Error('useNotificationDispatch must be used within a NotificationProvider');
+  }
+  return context;
+};
+
+export const useNotification = () => {
+  const state = useContext(NotificationStateContext);
+  const dispatch = useContext(NotificationDispatchContext);
+  if (state === undefined || dispatch === undefined) {
+    throw new Error('useNotification must be used within a NotificationProvider');
+  }
+  return { ...state, ...dispatch };
+};
+

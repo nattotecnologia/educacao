@@ -42,8 +42,8 @@ export default function LoginPage() {
         setErrorMsg(error.message);
         setLoading(false);
       } else {
-        router.push('/dashboard');
-        router.refresh();
+        // Redirecionamento completo para garantir sincronização do cookie e limpar estado do cliente
+        window.location.href = '/dashboard';
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocorreu um erro no login.');

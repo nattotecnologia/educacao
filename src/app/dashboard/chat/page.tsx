@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { messageService, leadService } from '@/services';
 import { 
   Search, User, Bot, UserCog, Send, Loader2, MessageSquare, ArrowLeft, Trash2,
@@ -21,12 +22,28 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export default function ChatPage() {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loadingLeads, setLoadingLeads] = useState(true);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 400);
+
+  // Query reativa para carregar os contatos/leads na barra lateral com TanStack Query
+  const { data: leadsResponse, isLoading: loadingLeads } = useQuery({
+    queryKey: ['chatLeads', debouncedSearch],
+    queryFn: async () => {
+      const res = await leadService.getFiltered({ 
+        search: debouncedSearch, 
+        pageSize: 100,
+        orderBy: 'updated_at',
+        orderDirection: 'desc' 
+      });
+      return res.data;
+    }
+  });
+
+  const leads = leadsResponse || [];
   
-  const [selectedLead, setSelectedLead] = useState<any>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const selectedLead = leads.find(l => l.id === selectedLeadId) || null;
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState('');
@@ -63,26 +80,6 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchLeads = useCallback(async () => {
-    try {
-      const { data } = await leadService.getFiltered({ 
-        search: debouncedSearch, 
-        pageSize: 100,
-        orderBy: 'updated_at',
-        orderDirection: 'desc' 
-      });
-      setLeads(data);
-    } catch (err) {
-      console.error('Erro ao buscar leads', err);
-    } finally {
-      setLoadingLeads(false);
-    }
-  }, [debouncedSearch]);
-
-  useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
-
   // Inscrição em Tempo Real para a LISTA de LEADS (Barra Lateral)
   useEffect(() => {
     let channel: any;
@@ -97,7 +94,7 @@ export default function ChatPage() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'leads' },
           () => {
-            fetchLeads();
+            queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
           }
         )
         .subscribe();
@@ -113,11 +110,11 @@ export default function ChatPage() {
         });
       }
     };
-  }, [fetchLeads]);
+  }, [queryClient]);
 
   // SSE para mensagens em tempo real
   useEffect(() => {
-    if (!selectedLead) return;
+    if (!selectedLeadId) return;
 
     const connectSSE = async () => {
       const supabase = await import('@/utils/supabase/client').then(m => m.createClient());
@@ -126,7 +123,7 @@ export default function ChatPage() {
 
       setLoadingMessages(true);
       try {
-        const initialMessages = await messageService.getMessages(selectedLead.id);
+        const initialMessages = await messageService.getMessages(selectedLeadId);
         setMessages(initialMessages);
       } catch (err) {
         console.error('Erro ao buscar mensagens iniciais', err);
@@ -134,7 +131,7 @@ export default function ChatPage() {
         setLoadingMessages(false);
       }
 
-      const eventSource = new EventSource(`/api/chat/stream?leadId=${selectedLead.id}`);
+      const eventSource = new EventSource(`/api/chat/stream?leadId=${selectedLeadId}`);
       eventSourceRef.current = eventSource;
 
       eventSource.addEventListener('message', (event) => {
@@ -163,11 +160,58 @@ export default function ChatPage() {
     return () => {
       eventSourceRef.current?.close();
     };
-  }, [selectedLead]);
+  }, [selectedLeadId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Mutações para manipulação de mensagens e atendimentos com React Query
+  const sendMessageMutation = useMutation({
+    mutationFn: ({ leadId, content }: { leadId: string; content: string }) => messageService.sendMessage(leadId, content),
+    onSuccess: (novaMensagem) => {
+      setMessages(prev => [...prev, novaMensagem]);
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
+
+  const handoffMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => leadService.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: (leadId: string) => leadService.clearChatHistory(leadId),
+    onSuccess: () => {
+      setMessages([]);
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
+
+  const clearHistoryManyMutation = useMutation({
+    mutationFn: (ids: string[]) => leadService.clearChatHistoryMany(ids),
+    onSuccess: () => {
+      if (selectedLead && selectedIds.has(selectedLead.id)) {
+        setMessages([]);
+      }
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
+
+  const clearHistoryAllMutation = useMutation({
+    mutationFn: () => leadService.clearChatHistoryAll(),
+    onSuccess: () => {
+      setMessages([]);
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setIsMoreMenuOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,16 +219,8 @@ export default function ChatPage() {
 
     setSending(true);
     try {
-      const novaMensagem = await messageService.sendMessage(selectedLead.id, draft);
-      setMessages(prev => [...prev, novaMensagem]);
+      await sendMessageMutation.mutateAsync({ leadId: selectedLead.id, content: draft });
       setDraft('');
-      setLeads(prev => {
-        const idx = prev.findIndex(l => l.id === selectedLead.id);
-        if (idx <= 0) return prev;
-        const updated = { ...prev[idx], updated_at: new Date().toISOString() };
-        const others = prev.filter(l => l.id !== selectedLead.id);
-        return [updated, ...others];
-      });
     } catch (err: any) {
       alert('Erro: ' + err.message);
     } finally {
@@ -196,9 +232,7 @@ export default function ChatPage() {
     if (!selectedLead) return;
     const newStatus = selectedLead.status === 'human_handling' ? 'ai_handling' : 'human_handling';
     try {
-      const updated = await leadService.updateStatus(selectedLead.id, newStatus);
-      setSelectedLead(updated);
-      setLeads(leads.map(l => l.id === updated.id ? updated : l));
+      await handoffMutation.mutateAsync({ id: selectedLead.id, status: newStatus });
     } catch (err: any) {
       alert('Erro ao alterar status: ' + err.message);
     }
@@ -219,8 +253,7 @@ export default function ChatPage() {
       'Tem certeza que deseja apagar todas as mensagens desta conversa? O lead continuará salvo.',
       async () => {
         try {
-          await leadService.clearChatHistory(selectedLead.id);
-          setMessages([]);
+          await clearHistoryMutation.mutateAsync(selectedLead.id);
           closeConfirmModal();
         } catch (err: any) {
           alert('Erro ao excluir histórico: ' + err.message);
@@ -235,12 +268,7 @@ export default function ChatPage() {
       `Tem certeza que deseja apagar o histórico de mensagens das ${selectedIds.size} conversas selecionadas? Os leads continuarão salvos.`,
       async () => {
         try {
-          await leadService.clearChatHistoryMany(Array.from(selectedIds));
-          if (selectedLead && selectedIds.has(selectedLead.id)) {
-            setMessages([]);
-          }
-          setSelectedIds(new Set());
-          setIsSelectionMode(false);
+          await clearHistoryManyMutation.mutateAsync(Array.from(selectedIds));
           closeConfirmModal();
         } catch (err: any) {
           alert('Erro ao limpar históricos selecionados: ' + err.message);
@@ -255,11 +283,7 @@ export default function ChatPage() {
       'Isso apagará permanentemente o histórico de mensagens de TODOS os leads. Os dados dos contatos e agendamentos serão preservados. Deseja continuar?',
       async () => {
         try {
-          await leadService.clearChatHistoryAll();
-          setMessages([]);
-          setSelectedIds(new Set());
-          setIsSelectionMode(false);
-          setIsMoreMenuOpen(false);
+          await clearHistoryAllMutation.mutateAsync();
           closeConfirmModal();
         } catch (err: any) {
           alert('Erro ao limpar todos os históricos: ' + err.message);
@@ -275,7 +299,6 @@ export default function ChatPage() {
     else newSet.add(id);
     setSelectedIds(newSet);
   };
-
   const handleLeadClick = (lead: any) => {
     if (isSelectionMode) {
       const newSet = new Set(selectedIds);
@@ -283,7 +306,7 @@ export default function ChatPage() {
       else newSet.add(lead.id);
       setSelectedIds(newSet);
     } else {
-      setSelectedLead(lead);
+      setSelectedLeadId(lead.id);
     }
   };
 
@@ -392,7 +415,7 @@ export default function ChatPage() {
           <>
             <div className={styles.chatHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <button className={styles.backBtn} onClick={() => setSelectedLead(null)}>
+                <button className={styles.backBtn} onClick={() => setSelectedLeadId(null)}>
                   <ArrowLeft size={20} />
                 </button>
                 <div className={styles.chatHeaderInfo}>

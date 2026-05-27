@@ -4,6 +4,7 @@ import "./globals.css";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { BrandingProvider } from "@/contexts/BrandingContext";
+import QueryProvider from "@/providers/QueryProvider";
 import { createClient } from "@/utils/supabase/server";
 
 const geistSans = Geist({
@@ -45,9 +46,11 @@ export default async function RootLayout({
       <body suppressHydrationWarning>
         <BrandingProvider settings={settings}>
           <ThemeProvider>
-            <NotificationProvider>
-              {children}
-            </NotificationProvider>
+            <QueryProvider>
+              <NotificationProvider>
+                {children}
+              </NotificationProvider>
+            </QueryProvider>
           </ThemeProvider>
         </BrandingProvider>
       </body>
