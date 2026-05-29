@@ -437,7 +437,7 @@ export default function VisitsPage() {
             <button className={`view-btn ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Semana</button>
             <button className={`view-btn ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Mês</button>
           </div>
-          <button className="agendar-btn" onClick={() => setShowNewForm(true)}>
+          <button className="custom-button" onClick={() => setShowNewForm(true)}>
             <Plus size={18} /> Agendar
           </button>
         </div>

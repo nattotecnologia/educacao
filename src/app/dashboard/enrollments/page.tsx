@@ -153,8 +153,8 @@ export default function EnrollmentsPage() {
         </div>
         <button
           id="btn-new-enrollment"
+          className="custom-button"
           onClick={() => router.push('/dashboard/enrollments/new')}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-primary)', color: '#fff', padding: '0.65rem 1.25rem', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600 }}
         >
           <Plus size={18} /> Nova Matrícula
         </button>

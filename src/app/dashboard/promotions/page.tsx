@@ -256,10 +256,8 @@ export default function PromotionsPage() {
           </p>
         </div>
         <button 
-          style={s.btn} 
+          className="custom-button"
           onClick={openNew}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.3)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(59, 130, 246, 0.2)'; }}
         >
           <Plus size={18} /> Nova Promoção
         </button>

@@ -210,6 +210,33 @@ export const leadService = {
       if (error) throw error;
     }
     return true;
+  },
+
+  async clearChatHistoryOlderThan(days: number) {
+    const profile = await authService.getProfile();
+    const instId = profile.institution_id;
+
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('institution_id', instId);
+    
+    if (leads && leads.length > 0) {
+      const ids = leads.map(l => l.id);
+      
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() - days);
+      const thresholdIso = thresholdDate.toISOString();
+
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .in('lead_id', ids)
+        .lt('created_at', thresholdIso);
+        
+      if (error) throw error;
+    }
+    return true;
   }
 };
 

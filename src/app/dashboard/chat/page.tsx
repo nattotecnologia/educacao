@@ -213,6 +213,17 @@ export default function ChatPage() {
     }
   });
 
+  const clearHistoryOlderThanMutation = useMutation({
+    mutationFn: (days: number) => leadService.clearChatHistoryOlderThan(days),
+    onSuccess: () => {
+      setMessages([]);
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setIsMoreMenuOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['chatLeads'] });
+    }
+  });
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.trim() || !selectedLead) return;
@@ -292,6 +303,22 @@ export default function ChatPage() {
     );
   };
 
+  const handleDeleteOlderThan = (days: number) => {
+    const period = days === 30 ? 'todo o mês' : `${days} dias`;
+    openConfirmModal(
+      'Limpar Conversas Antigas',
+      `Isso apagará permanentemente as mensagens mais antigas que ${period}. Deseja continuar?`,
+      async () => {
+        try {
+          await clearHistoryOlderThanMutation.mutateAsync(days);
+          closeConfirmModal();
+        } catch (err: any) {
+          alert('Erro ao limpar conversas antigas: ' + err.message);
+        }
+      }
+    );
+  };
+
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newSet = new Set(selectedIds);
@@ -334,6 +361,15 @@ export default function ChatPage() {
                 <div className={styles.dropdown}>
                   <button className={styles.dropdownItem} onClick={() => { setIsSelectionMode(true); setIsMoreMenuOpen(false); }}>
                     <CheckSquare size={16} /> Selecionar conversas
+                  </button>
+                  <button className={styles.dropdownItem} onClick={() => handleDeleteOlderThan(3)}>
+                    <Trash2 size={16} /> Limpar mais antigas que 3 dias
+                  </button>
+                  <button className={styles.dropdownItem} onClick={() => handleDeleteOlderThan(7)}>
+                    <Trash2 size={16} /> Limpar mais antigas que 7 dias
+                  </button>
+                  <button className={styles.dropdownItem} onClick={() => handleDeleteOlderThan(30)}>
+                    <Trash2 size={16} /> Limpar mais antigas que 30 dias (Mês)
                   </button>
                   <button className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`} onClick={handleDeleteAll}>
                     <Trash2 size={16} /> Limpar todos os históricos

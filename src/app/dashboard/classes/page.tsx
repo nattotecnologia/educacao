@@ -269,10 +269,8 @@ export default function ClassesPage() {
           </p>
         </div>
         <button 
-          style={s.btn} 
+          className="custom-button"
           onClick={() => router.push('/dashboard/classes/new')}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.3)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(59, 130, 246, 0.2)'; }}
         >
           <Plus size={18} /> Nova Turma
         </button>
@@ -332,7 +330,7 @@ export default function ClassesPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <span style={s.badge(st.color)}>{st.label}</span>
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        #{cls.id.substring(0, 6)}
+                        {cls.courses?.modality === 'presencial' ? '📍 Presencial' : cls.courses?.modality === 'online' ? '💻 Online' : ''}
                       </span>
                     </div>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
@@ -343,10 +341,7 @@ export default function ClassesPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                      <ModIcon size={20} />
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

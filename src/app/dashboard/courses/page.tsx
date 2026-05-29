@@ -58,21 +58,17 @@ export default function CoursesPage() {
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' },
     card: {
       background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)',
-      borderRadius: '12px', padding: '1.5rem', cursor: 'pointer',
-      transition: 'all 0.15s ease', display: 'flex', flexDirection: 'column' as const, gap: '1rem',
+      borderRadius: '16px', padding: '1.75rem', cursor: 'pointer',
+      transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column' as const, gap: '1.25rem',
+      position: 'relative' as const, overflow: 'hidden'
     },
     badge: (color: string) => ({
-      display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem',
-      fontWeight: 600, padding: '0.3rem 0.65rem', borderRadius: '999px',
-      background: `${color}20`, color,
+      display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem',
+      fontWeight: 700, padding: '0.3rem 0.7rem', borderRadius: '999px',
+      background: `${color}1a`, color, border: `1px solid ${color}33`
     }),
-    meta: { display: 'flex', gap: '1rem', flexWrap: 'wrap' as const },
-    metaItem: { display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--text-muted)' },
-    btn: {
-      display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-      background: 'var(--accent-primary)', color: '#fff',
-      padding: '0.65rem 1.25rem', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600,
-    },
+    meta: { display: 'flex', gap: '1rem', flexWrap: 'wrap' as const, alignItems: 'center' },
+    metaItem: { display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 },
     empty: {
       display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
       justifyContent: 'center', gap: '1rem', padding: '4rem', textAlign: 'center' as const,
@@ -84,12 +80,12 @@ export default function CoursesPage() {
     <div style={s.page}>
       <div style={s.header}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700 }}>Cursos</h1>
+          <h1 style={{ fontSize: '1.85rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Cursos</h1>
           <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
             Gerencie o catálogo de cursos da sua instituição.
           </p>
         </div>
-        <button id="btn-new-course" style={s.btn} onClick={() => router.push('/dashboard/courses/new')}>
+        <button id="btn-new-course" className="custom-button" onClick={() => router.push('/dashboard/courses/new')}>
           <Plus size={18} /> Novo Curso
         </button>
       </div>
@@ -107,13 +103,13 @@ export default function CoursesPage() {
       ) : courses.length === 0 ? (
         <div style={s.empty}>
           <BookOpen size={52} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
             Nenhum curso cadastrado
           </h3>
           <p style={{ maxWidth: '360px' }}>
             Crie seu primeiro curso para começar a gerenciar turmas e matrículas.
           </p>
-          <button style={s.btn} onClick={() => router.push('/dashboard/courses/new')}>
+          <button className="custom-button" onClick={() => router.push('/dashboard/courses/new')}>
             <Plus size={16} /> Criar Primeiro Curso
           </button>
         </div>
@@ -139,30 +135,37 @@ export default function CoursesPage() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <span style={s.badge(mod.color)}>
-                        <ModIcon size={11} /> {mod.label}
+                        <ModIcon size={12} /> {mod.label}
                       </span>
                       {!course.is_active && (
                         <span style={s.badge('#94a3b8')}>Inativo</span>
                       )}
                       {course.active_promotion && (
-                        <span style={s.badge('#10b981')}>🔥 {course.active_promotion}</span>
+                        <span style={{ 
+                          display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem',
+                          fontWeight: 800, padding: '0.3rem 0.75rem', borderRadius: '999px',
+                          background: 'linear-gradient(135deg, #f59e0b, #ef4444)', color: '#fff', 
+                          boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'
+                        }}>
+                          🔥 {course.active_promotion}
+                        </span>
                       )}
                     </div>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
                       {course.name}
                     </h3>
                     {course.description && (
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any, lineHeight: '1.5' }}>
                         {course.description}
                       </p>
                     )}
                   </div>
-                  <ChevronRight size={18} style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '0.5rem' }} />
+                  <ChevronRight size={20} style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '0.5rem' }} />
                 </div>
 
-                <div style={s.meta}>
+                <div style={{ ...s.meta, marginTop: 'auto', paddingTop: '1.25rem', borderTop: '1px solid var(--glass-border)' }}>
                   {course.duration_hours && (
                     <span style={s.metaItem}>
                       <Clock size={13} /> {course.duration_hours}h

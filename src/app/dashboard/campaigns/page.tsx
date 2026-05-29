@@ -113,7 +113,7 @@ export default function CampaignsPage() {
           <p className={styles.subtitle}>Gerencie envios em massa e automações de lembretes.</p>
         </div>
         {activeTab === 'promocoes' && (
-          <Link href="/dashboard/campaigns/new" className={styles.primaryBtn}>
+          <Link href="/dashboard/campaigns/new" className="custom-button">
             <Plus size={18} /> Novo Disparo
           </Link>
         )}
@@ -196,7 +196,7 @@ export default function CampaignsPage() {
               <Megaphone size={48} />
               <h2>Nenhum disparo encontrado</h2>
               <p>Você ainda não realizou nenhum disparo em massa. Crie uma nova campanha para enviar promoções aos seus leads.</p>
-              <Link href="/dashboard/campaigns/new" className={styles.primaryBtn}>
+              <Link href="/dashboard/campaigns/new" className="custom-button">
                 Criar Meu Primeiro Disparo
               </Link>
             </div>
@@ -284,7 +284,7 @@ export default function CampaignsPage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button type="submit" className={styles.primaryBtn} disabled={savingReminder}>
+              <button type="submit" className="custom-button" disabled={savingReminder}>
                 {savingReminder ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} /> Salvar Configurações</>}
               </button>
             </div>
